@@ -176,6 +176,7 @@ npm run preview      # 预览构建产物
 npm test             # 解析器单元测试
 npm run typecheck    # TypeScript 检查
 npm run parse:check -- <文件.chat.md>   # 打印解析统计（与 Python 参考解析器同格式，便于对拍）
+python scripts/chatlog_parse.py <文件.chat.md>   # Python 参考解析器（格式规范的基准实现）
 ```
 
 真实文件的 golden 测试通过环境变量启用（文件不存在时自动跳过）：
