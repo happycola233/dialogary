@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Dialogary</title>
+    <script>
+      // 防闪烁：在任何 CSS/JS 加载前根据偏好挂上 .dark
+      try {
+        var t = localStorage.getItem('dialogary-theme')
+        var dark =
+          t === 'dark' ||
+          ((!t || t === 'system') && window.matchMedia('(prefers-color-scheme: dark)').matches)
+        if (dark) document.documentElement.classList.add('dark')
+      } catch (e) {}
+    </script>
+    <style>
+      /* CSS 加载前的底色，避免深色模式首帧白屏闪烁 */
+      html {
+        background: #fff;
+      }
+      html.dark {
+        background: #000;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

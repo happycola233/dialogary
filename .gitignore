@@ -1,0 +1,8 @@
+node_modules/
+dist/
+
+# 个人日记数据不入库（把 *.chat.md 与 assets/ 放进 public/data/）
+public/data/
+
+*.local
+.DS_Store

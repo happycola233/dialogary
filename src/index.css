@@ -1,0 +1,688 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+html {
+  font-family: var(--font-sans);
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+/* 搜索跳转后的闪烁高亮 */
+@keyframes flash-fade {
+  0%,
+  35% {
+    background-color: rgb(251 191 36 / 0.22);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+.flash-highlight {
+  animation: flash-fade 1.8s ease-out;
+}
+
+/* ===== 以下从 happychat 移植：Markdown 渲染样式 ===== */
+
+:root {
+  --hc-msg-font: 15px;
+}
+
+/* Markdown 渲染排版 */
+.hc-md > :first-child {
+  margin-top: 0;
+}
+.hc-md > :last-child {
+  margin-bottom: 0;
+}
+.hc-md p {
+  margin: 0.5rem 0;
+}
+.hc-md h1,
+.hc-md h2,
+.hc-md h3,
+.hc-md h4,
+.hc-md h5,
+.hc-md h6 {
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 1rem 0 0.5rem;
+}
+.hc-md h1 {
+  font-size: 1.4em;
+}
+.hc-md h2 {
+  font-size: 1.25em;
+}
+.hc-md h3 {
+  font-size: 1.1em;
+}
+.hc-md h4 {
+  font-size: 1.02em;
+}
+.hc-md h5 {
+  font-size: 0.96em;
+}
+.hc-md h6 {
+  color: #525252;
+  font-size: 0.9em;
+}
+.hc-md ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+.hc-md ul ul {
+  list-style-type: circle;
+}
+.hc-md ul ul ul {
+  list-style-type: square;
+}
+.hc-md ul ul ul ul {
+  list-style-type: disc;
+}
+.hc-md ol {
+  list-style-type: decimal;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+.hc-md ol ol {
+  list-style-type: lower-alpha;
+}
+.hc-md ol ol ol {
+  list-style-type: lower-roman;
+}
+.hc-md ol ol ol ol {
+  list-style-type: decimal;
+}
+.hc-md li {
+  margin: 0.25rem 0;
+}
+.hc-md mark {
+  border-radius: 0.28rem;
+  background: rgb(255 231 112 / 0.72);
+  box-shadow: 0 0 0 0.08em rgb(255 231 112 / 0.72);
+  color: inherit;
+  padding: 0 0.12em;
+}
+.hc-md kbd {
+  display: inline-block;
+  min-width: 1.65em;
+  border: 1px solid #d4d4d4;
+  border-bottom-color: #a3a3a3;
+  border-radius: 0.42rem;
+  background: #fafafa;
+  box-shadow: inset 0 -1px 0 #d4d4d4;
+  color: #262626;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82em;
+  line-height: 1.45;
+  padding: 0.02em 0.38em;
+  text-align: center;
+  vertical-align: 0.08em;
+}
+.hc-md sub,
+.hc-md sup {
+  font-size: 0.75em;
+  line-height: 0;
+}
+.hc-md blockquote {
+  position: relative;
+  margin: 0.95rem 0;
+  padding-left: 1.25rem;
+  color: inherit;
+}
+.hc-md blockquote::before {
+  content: '';
+  position: absolute;
+  top: 0.2em;
+  bottom: 0.2em;
+  left: 0;
+  width: 4px;
+  border-radius: 999px;
+  background: #d7d7d7;
+}
+.hc-md blockquote > :first-child {
+  margin-top: 0;
+}
+.hc-md blockquote > :last-child {
+  margin-bottom: 0;
+}
+.hc-md .hc-md-alert {
+  --hc-md-alert-fg: #0969da;
+  --hc-md-alert-border: #0969da;
+  padding-left: 1.35rem;
+}
+.hc-md .hc-md-alert::before {
+  top: 0;
+  bottom: 0;
+  background: var(--hc-md-alert-border);
+}
+.hc-md .hc-md-alert-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.55rem;
+  color: var(--hc-md-alert-fg);
+  font-weight: 650;
+  line-height: 1.25;
+}
+.hc-md .hc-md-alert-icon {
+  width: 1em;
+  height: 1em;
+  flex: 0 0 auto;
+  stroke-width: 2.25;
+}
+.hc-md .hc-md-alert-tip {
+  --hc-md-alert-fg: #1a7f37;
+  --hc-md-alert-border: #1f883d;
+}
+.hc-md .hc-md-alert-important {
+  --hc-md-alert-fg: #8250df;
+  --hc-md-alert-border: #8250df;
+}
+.hc-md .hc-md-alert-warning {
+  --hc-md-alert-fg: #9a6700;
+  --hc-md-alert-border: #9a6700;
+}
+.hc-md .hc-md-alert-caution {
+  --hc-md-alert-fg: #d1242f;
+  --hc-md-alert-border: #cf222e;
+}
+.hc-md hr {
+  border: none;
+  border-top: 1px solid #e5e5e5;
+  margin: 1rem 0;
+}
+.hc-md .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.hc-md :target {
+  scroll-margin-block: 4.75rem 7rem;
+}
+.hc-md sup > a[data-footnote-ref] {
+  margin-left: 0.12em;
+  font-size: 0.78em;
+  font-weight: 500;
+  line-height: 0;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.hc-md sup > a[data-footnote-ref]::before {
+  content: '[';
+}
+.hc-md sup > a[data-footnote-ref]::after {
+  content: ']';
+}
+.hc-md sup > a[data-footnote-ref]:hover,
+.hc-md sup > a[data-footnote-ref]:focus-visible {
+  text-decoration: underline;
+}
+.hc-md sup > a[data-footnote-ref]:target {
+  border-radius: 0.25rem;
+  background: rgb(84 174 255 / 0.2);
+  outline: 2px solid rgb(37 99 235 / 0.28);
+  outline-offset: 2px;
+}
+.hc-md .footnotes {
+  margin-top: 1.45rem;
+  padding-top: 0.95rem;
+  border-top: 1px solid #d8dee4;
+  color: #57606a;
+  font-size: 0.86em;
+  line-height: 1.58;
+}
+.hc-md .footnotes ol {
+  margin: 0;
+  padding-left: 1.35rem;
+}
+.hc-md .footnotes li {
+  margin: 0.45rem 0;
+  padding-left: 0.2rem;
+}
+.hc-md .footnotes li::marker {
+  color: #6e7781;
+}
+.hc-md .footnotes li:target {
+  border-radius: 0.35rem;
+  background: rgb(255 248 197 / 0.62);
+  box-shadow: 0 0 0 0.35rem rgb(255 248 197 / 0.62);
+}
+.hc-md .footnotes p {
+  margin: 0;
+}
+.hc-md .footnotes a[data-footnote-backref] {
+  margin-left: 0.25rem;
+  font-size: 0.9em;
+  text-decoration-line: underline;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.18em;
+}
+.hc-md .footnotes a[data-footnote-backref]:hover,
+.hc-md .footnotes a[data-footnote-backref]:focus-visible {
+  text-decoration-thickness: 0.12em;
+}
+.hc-table-block table {
+  width: 100%;
+  min-width: max-content;
+  border-collapse: collapse;
+  font-size: 0.98em;
+}
+.hc-table-block th,
+.hc-table-block td {
+  border: 0;
+  border-bottom: 1px solid #ededed;
+  padding: 0.7rem 1rem 0.7rem 0;
+  text-align: left;
+  vertical-align: top;
+}
+.hc-table-block th:last-child {
+  padding-right: 3.25rem;
+}
+.hc-table-block th {
+  color: #0a0a0a;
+  font-weight: 700;
+}
+.hc-table-block tbody tr:last-child td {
+  border-bottom-color: transparent;
+}
+.hc-table-block .hc-table-scroll {
+  scrollbar-width: thin;
+}
+.hc-md code,
+.hc-md pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.hc-md :not(pre) > code {
+  background: #f0f0f0;
+  padding: 0.16em 0.45em;
+  border-radius: 0.38rem;
+  font-size: 0.88em;
+}
+.hc-md pre code {
+  background: transparent;
+  padding: 0;
+  font-size: inherit;
+}
+.hc-mermaid-block {
+  contain: content;
+}
+.hc-mermaid-scroll {
+  scrollbar-width: thin;
+}
+.hc-mermaid-diagram {
+  text-align: center;
+}
+.hc-mermaid-diagram svg {
+  display: inline-block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  min-width: min(100%, 20rem);
+}
+.hc-mermaid-error .hc-code-block {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+.hc-md-reasoning p {
+  margin: 0.35rem 0;
+}
+.hc-md-reasoning h1,
+.hc-md-reasoning h2,
+.hc-md-reasoning h3,
+.hc-md-reasoning h4,
+.hc-md-reasoning h5,
+.hc-md-reasoning h6 {
+  margin: 0.65rem 0 0.35rem;
+}
+.hc-md-reasoning ul,
+.hc-md-reasoning ol {
+  padding-left: 1.25rem;
+  margin: 0.35rem 0;
+}
+.hc-md-reasoning li {
+  margin: 0.15rem 0;
+}
+.hc-md-reasoning strong {
+  color: #525252;
+}
+.hc-code-block pre code.hljs,
+.hc-code-block code.hljs {
+  display: block;
+  overflow-x: visible;
+  background: transparent;
+  padding: 0;
+  color: #24292f;
+}
+.hc-code-block .hljs-keyword,
+.hc-code-block .hljs-meta .hljs-keyword,
+.hc-code-block .hljs-template-tag,
+.hc-code-block .hljs-template-variable,
+.hc-code-block .hljs-type,
+.hc-code-block .hljs-variable.language_ {
+  color: #cf222e;
+}
+.hc-code-block .hljs-title,
+.hc-code-block .hljs-title.class_,
+.hc-code-block .hljs-title.function_ {
+  color: #8250df;
+}
+.hc-code-block .hljs-attr,
+.hc-code-block .hljs-attribute,
+.hc-code-block .hljs-literal,
+.hc-code-block .hljs-meta,
+.hc-code-block .hljs-number,
+.hc-code-block .hljs-operator,
+.hc-code-block .hljs-variable,
+.hc-code-block .hljs-selector-attr,
+.hc-code-block .hljs-selector-class,
+.hc-code-block .hljs-selector-id {
+  color: #0550ae;
+}
+.hc-code-block .hljs-regexp,
+.hc-code-block .hljs-string,
+.hc-code-block .hljs-meta .hljs-string {
+  color: #0a3069;
+}
+.hc-code-block .hljs-built_in,
+.hc-code-block .hljs-symbol {
+  color: #953800;
+}
+.hc-code-block .hljs-comment,
+.hc-code-block .hljs-code,
+.hc-code-block .hljs-formula {
+  color: #6e7781;
+}
+.hc-code-block .hljs-name,
+.hc-code-block .hljs-quote,
+.hc-code-block .hljs-selector-tag,
+.hc-code-block .hljs-selector-pseudo {
+  color: #116329;
+}
+.dark .hc-md blockquote {
+  color: inherit;
+}
+.dark .hc-md h6 {
+  color: #a3a3a3;
+}
+.dark .hc-md blockquote::before {
+  background: #3f3f3f;
+}
+.dark .hc-md .hc-md-alert {
+  --hc-md-alert-fg: #58a6ff;
+  --hc-md-alert-border: #1f6feb;
+}
+.dark .hc-md .hc-md-alert-tip {
+  --hc-md-alert-fg: #3fb950;
+  --hc-md-alert-border: #238636;
+}
+.dark .hc-md .hc-md-alert-important {
+  --hc-md-alert-fg: #a371f7;
+  --hc-md-alert-border: #8957e5;
+}
+.dark .hc-md .hc-md-alert-warning {
+  --hc-md-alert-fg: #d29922;
+  --hc-md-alert-border: #9e6a03;
+}
+.dark .hc-md .hc-md-alert-caution {
+  --hc-md-alert-fg: #f85149;
+  --hc-md-alert-border: #da3633;
+}
+.dark .hc-md hr {
+  border-color: #404040;
+}
+.dark .hc-md sup > a[data-footnote-ref]:target {
+  background: rgb(56 139 253 / 0.24);
+  outline-color: rgb(96 165 250 / 0.32);
+}
+.dark .hc-md .footnotes {
+  border-top-color: #30363d;
+  color: #8b949e;
+}
+.dark .hc-md .footnotes li::marker {
+  color: #7d8590;
+}
+.dark .hc-md .footnotes li:target {
+  background: rgb(187 128 9 / 0.22);
+  box-shadow: 0 0 0 0.35rem rgb(187 128 9 / 0.22);
+}
+.dark .hc-table-block th {
+  color: #f5f5f5;
+}
+.dark .hc-table-block th,
+.dark .hc-table-block td {
+  border-bottom-color: #2f2f2f;
+}
+.dark .hc-md :not(pre) > code {
+  background: #404040;
+}
+.dark .hc-md mark {
+  background: rgb(133 93 0 / 0.58);
+  box-shadow: 0 0 0 0.08em rgb(133 93 0 / 0.58);
+}
+.dark .hc-md kbd {
+  border-color: #525252;
+  border-bottom-color: #737373;
+  background: #262626;
+  box-shadow: inset 0 -1px 0 #525252;
+  color: #f5f5f5;
+}
+.dark .hc-mermaid-block {
+  color-scheme: dark;
+}
+.dark .hc-md-reasoning strong {
+  color: #d4d4d4;
+}
+.dark .hc-code-block pre code.hljs,
+.dark .hc-code-block code.hljs {
+  color: #c9d1d9;
+}
+.dark .hc-code-block .hljs-keyword,
+.dark .hc-code-block .hljs-meta .hljs-keyword,
+.dark .hc-code-block .hljs-template-tag,
+.dark .hc-code-block .hljs-template-variable,
+.dark .hc-code-block .hljs-type,
+.dark .hc-code-block .hljs-variable.language_ {
+  color: #ff7b72;
+}
+.dark .hc-code-block .hljs-title,
+.dark .hc-code-block .hljs-title.class_,
+.dark .hc-code-block .hljs-title.function_ {
+  color: #d2a8ff;
+}
+.dark .hc-code-block .hljs-attr,
+.dark .hc-code-block .hljs-attribute,
+.dark .hc-code-block .hljs-literal,
+.dark .hc-code-block .hljs-meta,
+.dark .hc-code-block .hljs-number,
+.dark .hc-code-block .hljs-operator,
+.dark .hc-code-block .hljs-variable,
+.dark .hc-code-block .hljs-selector-attr,
+.dark .hc-code-block .hljs-selector-class,
+.dark .hc-code-block .hljs-selector-id {
+  color: #79c0ff;
+}
+.dark .hc-code-block .hljs-regexp,
+.dark .hc-code-block .hljs-string,
+.dark .hc-code-block .hljs-meta .hljs-string {
+  color: #a5d6ff;
+}
+.dark .hc-code-block .hljs-built_in,
+.dark .hc-code-block .hljs-symbol {
+  color: #ffa657;
+}
+.dark .hc-code-block .hljs-comment,
+.dark .hc-code-block .hljs-code,
+.dark .hc-code-block .hljs-formula {
+  color: #8b949e;
+}
+.dark .hc-code-block .hljs-name,
+.dark .hc-code-block .hljs-quote,
+.dark .hc-code-block .hljs-selector-tag,
+.dark .hc-code-block .hljs-selector-pseudo {
+  color: #7ee787;
+}
+
+/* ===== 推理摘要（对齐 happychat ReasoningCard）===== */
+.hc-reasoning {
+  --hc-reasoning-status: rgb(115 115 115);
+  --hc-reasoning-status-hover: #0d0d0d;
+}
+.dark .hc-reasoning {
+  --hc-reasoning-status: rgb(163 163 163);
+  --hc-reasoning-status-hover: #f5f5f5;
+}
+.hc-reasoning-status {
+  color: var(--hc-reasoning-status);
+}
+.hc-reasoning-status:hover {
+  color: var(--hc-reasoning-status-hover);
+}
+.hc-reasoning-collapse {
+  overflow-anchor: none;
+}
+.hc-reasoning-detail {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.hc-reasoning-detail p {
+  margin: 0.2rem 0;
+}
+
+/* ===== 细滚动条（自 happychat .hc-scrollbar）===== */
+.hc-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(163 163 163 / 0.8) transparent;
+}
+.hc-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.hc-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.hc-scrollbar::-webkit-scrollbar-thumb {
+  min-height: 2rem;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: rgb(163 163 163 / 0.7);
+  background-clip: padding-box;
+}
+.hc-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(115 115 115 / 0.85);
+}
+.hc-scrollbar::-webkit-scrollbar-corner,
+.hc-scrollbar::-webkit-scrollbar-button {
+  display: none;
+}
+.dark .hc-scrollbar {
+  scrollbar-color: rgb(115 115 115 / 0.8) transparent;
+}
+.dark .hc-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgb(115 115 115 / 0.65);
+}
+.dark .hc-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(163 163 163 / 0.75);
+}
+
+/* ===== 外观设置：消息字号（默认 15px 定义于 :root 的 --hc-msg-font）===== */
+html.hc-font-small {
+  --hc-msg-font: 14px;
+}
+html.hc-font-large {
+  --hc-msg-font: 17px;
+}
+
+/* ===== 外观设置：正文内容宽度 ===== */
+:root {
+  --dg-content-width: 48rem;
+}
+html.dg-width-narrow {
+  --dg-content-width: 42rem;
+}
+html.dg-width-wide {
+  --dg-content-width: 60rem;
+}
+
+/* ===== 用户气泡重点色（hc-accent-*，色值与 happychat 一致）=====
+   选择器顺序即层叠顺序：浅色预设 → html.dark 深色默认 → 深色预设（更高特异性）。 */
+.hc-user-bubble {
+  background: var(--hc-user-bubble-bg);
+  color: var(--hc-user-bubble-text);
+}
+.hc-user-message-text {
+  color: var(--hc-user-bubble-text);
+}
+:root {
+  --hc-user-bubble-bg: #f3f3f3;
+  --hc-user-bubble-text: #0d0d0d;
+}
+html.hc-accent-blue {
+  --hc-user-bubble-bg: #e8f3fe;
+  --hc-user-bubble-text: #0c274a;
+}
+html.hc-accent-green {
+  --hc-user-bubble-bg: #def3e5;
+  --hc-user-bubble-text: #14361a;
+}
+html.hc-accent-yellow {
+  --hc-user-bubble-bg: #fdf6dc;
+  --hc-user-bubble-text: #51300c;
+}
+html.hc-accent-pink {
+  --hc-user-bubble-bg: #fcf1ef;
+  --hc-user-bubble-text: #462320;
+}
+html.hc-accent-orange {
+  --hc-user-bubble-bg: #fbe8db;
+  --hc-user-bubble-text: #45240d;
+}
+html.hc-accent-purple {
+  --hc-user-bubble-bg: #ede5fc;
+  --hc-user-bubble-text: #291947;
+}
+html.dark {
+  --hc-user-bubble-bg: #2b2b2b;
+  --hc-user-bubble-text: #ffffff;
+}
+html.dark.hc-accent-blue {
+  --hc-user-bubble-bg: #173e76;
+  --hc-user-bubble-text: #f6fafe;
+}
+html.dark.hc-accent-green {
+  --hc-user-bubble-bg: #2c6732;
+  --hc-user-bubble-text: #effaf3;
+}
+html.dark.hc-accent-yellow {
+  --hc-user-bubble-bg: #95611f;
+  --hc-user-bubble-text: #fefbee;
+}
+html.dark.hc-accent-pink {
+  --hc-user-bubble-bg: #8b3f36;
+  --hc-user-bubble-text: #fef7f6;
+}
+html.dark.hc-accent-orange {
+  --hc-user-bubble-bg: #87401d;
+  --hc-user-bubble-text: #fdf5f1;
+}
+html.dark.hc-accent-purple {
+  --hc-user-bubble-bg: #4e2f88;
+  --hc-user-bubble-text: #f8f5fd;
+}

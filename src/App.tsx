@@ -1,0 +1,166 @@
+import { useEffect, useState } from 'react'
+import { lazy, Suspense } from 'react'
+import { ChatPane } from './components/ChatPane'
+import { ExportDialog } from './components/ExportDialog'
+import { Lightbox } from './components/Lightbox'
+
+// recharts 体积不小，统计页按需加载
+const StatsView = lazy(() => import('./components/StatsView').then((m) => ({ default: m.StatsView })))
+import { SearchDialog } from './components/SearchDialog'
+import { SettingsDialog } from './components/SettingsDialog'
+import { Sidebar } from './components/Sidebar'
+import { Toasts } from './components/Toasts'
+import { TopBar } from './components/TopBar'
+import { WelcomeScreen } from './components/WelcomeScreen'
+import { filesFromDataTransfer } from './data/pickSource'
+import { initTheme } from './lib/theme'
+import { useAppStore } from './model/store'
+
+export default function App() {
+  const load = useAppStore((s) => s.load)
+  const bootstrap = useAppStore((s) => s.bootstrap)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem('dialogary-sidebar') === 'collapsed',
+  )
+  const [dragging, setDragging] = useState(false)
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem('dialogary-sidebar', next ? 'collapsed' : 'open')
+      } catch {
+        // 忽略写入失败
+      }
+      return next
+    })
+  }
+
+  useEffect(() => {
+    initTheme()
+    void bootstrap()
+  }, [bootstrap])
+
+  // Ctrl/Cmd+K 打开搜索
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        useAppStore.getState().setSearchOpen(true)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  // 全窗口拖拽打开
+  useEffect(() => {
+    let depth = 0
+    const onEnter = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes('Files')) {
+        depth++
+        setDragging(true)
+      }
+    }
+    const onLeave = () => {
+      depth = Math.max(0, depth - 1)
+      if (depth === 0) setDragging(false)
+    }
+    const onOver = (e: DragEvent) => e.preventDefault()
+    const onDrop = (e: DragEvent) => {
+      e.preventDefault()
+      depth = 0
+      setDragging(false)
+      if (e.dataTransfer) {
+        void filesFromDataTransfer(e.dataTransfer).then((files) => {
+          if (files.length) void useAppStore.getState().openFiles(files)
+        })
+      }
+    }
+    window.addEventListener('dragenter', onEnter)
+    window.addEventListener('dragleave', onLeave)
+    window.addEventListener('dragover', onOver)
+    window.addEventListener('drop', onDrop)
+    return () => {
+      window.removeEventListener('dragenter', onEnter)
+      window.removeEventListener('dragleave', onLeave)
+      window.removeEventListener('dragover', onOver)
+      window.removeEventListener('drop', onDrop)
+    }
+  }, [])
+
+  return (
+    <div className="flex h-dvh flex-col bg-white text-neutral-800 dark:bg-black dark:text-neutral-100">
+      {load.phase === 'ready' ? (
+        <>
+          <TopBar
+            onMenuClick={() => setSidebarOpen(true)}
+            sidebarCollapsed={sidebarCollapsed}
+            onToggleSidebar={toggleSidebar}
+          />
+          <div className="flex min-h-0 flex-1">
+            <aside
+              className={
+                sidebarCollapsed
+                  ? 'hidden'
+                  : 'hidden w-60 shrink-0 border-r border-neutral-200/80 bg-neutral-50 md:block dark:border-neutral-800 dark:bg-neutral-900'
+              }
+            >
+              <Sidebar />
+            </aside>
+            {sidebarOpen && (
+              <div className="fixed inset-0 z-40 md:hidden">
+                <div
+                  className="absolute inset-0 bg-black/40"
+                  onClick={() => setSidebarOpen(false)}
+                />
+                <div className="absolute inset-y-0 left-0 w-80 max-w-[85vw] bg-neutral-50 pt-[env(safe-area-inset-top)] shadow-xl dark:bg-neutral-900">
+                  <Sidebar onNavigate={() => setSidebarOpen(false)} />
+                </div>
+              </div>
+            )}
+            <main className="hc-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              <ViewSwitch />
+            </main>
+          </div>
+        </>
+      ) : load.phase === 'loading' ? (
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-sm text-neutral-400">加载中…</p>
+        </div>
+      ) : (
+        <WelcomeScreen reason={load.reason} />
+      )}
+      {dragging && (
+        <div className="pointer-events-none fixed inset-0 z-[60] flex items-center justify-center border-4 border-dashed border-indigo-400/70 bg-indigo-500/10 backdrop-blur-[1px]">
+          <p className="rounded-xl bg-white/90 px-5 py-3 text-sm font-medium text-indigo-600 shadow-lg dark:bg-neutral-800/90 dark:text-indigo-300">
+            松开以打开 .chat.md 文件或文件夹
+          </p>
+        </div>
+      )}
+      <SearchDialog />
+      <ExportDialog />
+      <SettingsDialog />
+      <Lightbox />
+      <Toasts />
+    </div>
+  )
+}
+
+function ViewSwitch() {
+  const view = useAppStore((s) => s.view)
+  return (
+    <>
+      {/* ChatPane 常驻保留滚动位置与已挂载内容，统计视图叠加显示 */}
+      <div className={view === 'chat' ? undefined : 'hidden'}>
+        <ChatPane />
+      </div>
+      {view === 'stats' && (
+        <Suspense fallback={<p className="py-16 text-center text-sm text-neutral-400">加载统计…</p>}>
+          <StatsView />
+        </Suspense>
+      )}
+    </>
+  )
+}
