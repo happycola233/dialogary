@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { lazy, Suspense } from 'react'
+import clsx from 'clsx'
 import { ChatPane } from './components/ChatPane'
 import { ExportDialog } from './components/ExportDialog'
 import { Lightbox } from './components/Lightbox'
@@ -16,6 +17,10 @@ import { filesFromDataTransfer } from './data/pickSource'
 import { initTheme } from './lib/theme'
 import { useAppStore } from './model/store'
 
+const SIDEBAR_MIN = 184
+const SIDEBAR_MAX = 420
+const SIDEBAR_DEFAULT = 240
+
 export default function App() {
   const load = useAppStore((s) => s.load)
   const bootstrap = useAppStore((s) => s.bootstrap)
@@ -23,6 +28,11 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem('dialogary-sidebar') === 'collapsed',
   )
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const v = Number(localStorage.getItem('dialogary-sidebar-width'))
+    return Number.isFinite(v) && v >= SIDEBAR_MIN && v <= SIDEBAR_MAX ? v : SIDEBAR_DEFAULT
+  })
+  const [resizing, setResizing] = useState(false)
   const [dragging, setDragging] = useState(false)
 
   const toggleSidebar = () => {
@@ -35,6 +45,33 @@ export default function App() {
       }
       return next
     })
+  }
+
+  const startSidebarResize = (e: React.PointerEvent) => {
+    e.preventDefault()
+    setResizing(true)
+    const startX = e.clientX
+    const startW = sidebarWidth
+    let latest = startW
+    const prevUserSelect = document.body.style.userSelect
+    document.body.style.userSelect = 'none'
+    const onMove = (ev: PointerEvent) => {
+      latest = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, startW + ev.clientX - startX))
+      setSidebarWidth(latest)
+    }
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      document.body.style.userSelect = prevUserSelect
+      setResizing(false)
+      try {
+        localStorage.setItem('dialogary-sidebar-width', String(latest))
+      } catch {
+        // 忽略写入失败
+      }
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
   }
 
   useEffect(() => {
@@ -101,13 +138,25 @@ export default function App() {
           />
           <div className="flex min-h-0 flex-1">
             <aside
-              className={
-                sidebarCollapsed
-                  ? 'hidden'
-                  : 'hidden w-60 shrink-0 border-r border-neutral-200/80 bg-neutral-50 md:block dark:border-neutral-800 dark:bg-neutral-900'
-              }
+              className={clsx(
+                'relative hidden shrink-0 overflow-hidden bg-neutral-50 md:block dark:bg-neutral-900',
+                !sidebarCollapsed && 'border-r border-neutral-200/80 dark:border-neutral-800',
+                // 折叠/展开用宽度过渡动画；拖拽调宽时关掉过渡跟手
+                !resizing && 'transition-[width] duration-300 ease-out',
+              )}
+              style={{ width: sidebarCollapsed ? 0 : sidebarWidth }}
             >
-              <Sidebar />
+              {/* 内容固定为当前侧栏宽度，折叠动画期间不回流 */}
+              <div className="h-full" style={{ width: sidebarWidth }}>
+                <Sidebar />
+              </div>
+              {!sidebarCollapsed && (
+                <div
+                  onPointerDown={startSidebarResize}
+                  title="拖拽调整宽度"
+                  className="absolute inset-y-0 right-0 z-20 w-1 cursor-col-resize transition-colors hover:bg-indigo-400/50 active:bg-indigo-400/70"
+                />
+              )}
             </aside>
             {sidebarOpen && (
               <div className="fixed inset-0 z-40 md:hidden">
@@ -120,7 +169,11 @@ export default function App() {
                 </div>
               </div>
             )}
-            <main className="hc-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            {/* overflow-anchor 关闭：滚动锚定由 lib/scrollAnchoring 手动完成，避免双重校正 */}
+            <main
+              className="hc-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain"
+              style={{ overflowAnchor: 'none' }}
+            >
               <ViewSwitch />
             </main>
           </div>

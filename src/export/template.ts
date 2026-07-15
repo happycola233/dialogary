@@ -26,10 +26,12 @@ export interface ExportTemplate {
   ai: RoleTemplate
 }
 
-export type ExportScope =
-  | { kind: 'all' }
-  | { kind: 'filtered'; role: 'user' | 'ai' }
-  | { kind: 'range'; from: string; to: string }
+/** 导出范围：角色筛选与日期区间相互独立，可组合 */
+export interface ExportScope {
+  role: 'all' | 'user' | 'ai'
+  /** 日期区间（含两端），null = 不限定 */
+  range: { from: string; to: string } | null
+}
 
 const TOKEN_RE = /\{(content|time|date|weekday|timeOfDay|model|title|thinkingLabel|index)\}/g
 
@@ -75,11 +77,11 @@ export function renderExport(doc: DerivedDoc, template: ExportTemplate, scope: E
   let index = 0
 
   for (const session of doc.sessions) {
-    if (scope.kind === 'range') {
-      if (!session.date || session.date < scope.from || session.date > scope.to) continue
+    if (scope.range) {
+      if (!session.date || session.date < scope.range.from || session.date > scope.range.to) continue
     }
     const msgs = session.messages.filter((m) => {
-      if (scope.kind === 'filtered' && m.role !== scope.role) return false
+      if (scope.role !== 'all' && m.role !== scope.role) return false
       const rt = m.role === 'user' ? template.user : template.ai
       return rt.include
     })

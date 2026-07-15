@@ -7,14 +7,15 @@ import { renderExport, type ExportScope, type ExportTemplate, type RoleTemplate 
 import { useAppStore } from '../model/store'
 import clsx from 'clsx'
 
-type ScopeKind = 'all' | 'user' | 'ai' | 'range'
+type RoleScope = ExportScope['role']
 
 export function ExportDialog() {
   const open = useAppStore((s) => s.exportOpen)
   const setOpen = useAppStore((s) => s.setExportOpen)
   const doc = useAppStore((s) => s.doc)
   const [template, setTemplate] = useState<ExportTemplate>(() => loadSavedTemplate() ?? PRESETS[0]!.template)
-  const [scopeKind, setScopeKind] = useState<ScopeKind>('all')
+  const [roleScope, setRoleScope] = useState<RoleScope>('all')
+  const [rangeOn, setRangeOn] = useState(false)
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [copied, setCopied] = useState(false)
@@ -26,11 +27,10 @@ export function ExportDialog() {
     }
   }, [open, doc])
 
-  const scope: ExportScope = useMemo(() => {
-    if (scopeKind === 'range' && from && to) return { kind: 'range', from, to }
-    if (scopeKind === 'user' || scopeKind === 'ai') return { kind: 'filtered', role: scopeKind }
-    return { kind: 'all' }
-  }, [scopeKind, from, to])
+  const scope: ExportScope = useMemo(
+    () => ({ role: roleScope, range: rangeOn && from && to ? { from, to } : null }),
+    [roleScope, rangeOn, from, to],
+  )
 
   const output = useMemo(() => (doc && open ? renderExport(doc, template, scope) : ''), [doc, open, template, scope])
 
@@ -111,16 +111,15 @@ export function ExportDialog() {
                     ['all', '全部'],
                     ['user', '仅我的消息'],
                     ['ai', '仅 AI'],
-                    ['range', '日期区间'],
                   ] as const
                 ).map(([k, label]) => (
                   <button
                     key={k}
                     type="button"
-                    onClick={() => setScopeKind(k)}
+                    onClick={() => setRoleScope(k)}
                     className={clsx(
                       'rounded-lg px-2.5 py-1 text-xs transition-colors',
-                      scopeKind === k
+                      roleScope === k
                         ? 'bg-indigo-500 text-white dark:bg-indigo-500/80'
                         : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700',
                     )}
@@ -129,7 +128,21 @@ export function ExportDialog() {
                   </button>
                 ))}
               </div>
-              {scopeKind === 'range' && (
+            </div>
+
+            {/* 日期区间独立于角色筛选，可组合 */}
+            <div>
+              <div className={labelCls}>日期区间</div>
+              <label className="mt-1.5 flex items-center gap-2 text-[13px] text-neutral-600 dark:text-neutral-300">
+                <input
+                  type="checkbox"
+                  checked={rangeOn}
+                  onChange={(e) => setRangeOn(e.target.checked)}
+                  className="accent-indigo-500"
+                />
+                只导出这段日期
+              </label>
+              {rangeOn && (
                 <div className="mt-2 flex items-center gap-2">
                   <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={inputCls} />
                   <span className="text-neutral-400">–</span>
@@ -140,7 +153,7 @@ export function ExportDialog() {
 
             {(['user', 'ai'] as const).map((role) => {
               const rt = template[role]
-              const disabled = (scopeKind === 'user' && role === 'ai') || (scopeKind === 'ai' && role === 'user')
+              const disabled = roleScope !== 'all' && roleScope !== role
               return (
                 <fieldset key={role} disabled={disabled} className={clsx('rounded-xl border border-neutral-200/80 p-3 dark:border-neutral-700/60', disabled && 'opacity-40')}>
                   <label className="flex items-center gap-2 text-[13px] font-medium">

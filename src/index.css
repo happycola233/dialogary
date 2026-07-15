@@ -602,23 +602,49 @@ html.dark {
   background-color: rgb(163 163 163 / 0.75);
 }
 
-/* ===== 外观设置：消息字号（默认 15px 定义于 :root 的 --hc-msg-font）===== */
-html.hc-font-small {
-  --hc-msg-font: 14px;
-}
-html.hc-font-large {
-  --hc-msg-font: 17px;
+/* ===== 外观设置：正文内容宽度（数值由 appearance.ts 以内联变量覆盖）===== */
+:root {
+  --dg-content-width: 768px;
 }
 
-/* ===== 外观设置：正文内容宽度 ===== */
-:root {
-  --dg-content-width: 48rem;
+/* ===== 设置面板滑杆 ===== */
+.dg-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: #e5e5e5;
+  outline: none;
+  cursor: pointer;
 }
-html.dg-width-narrow {
-  --dg-content-width: 42rem;
+.dark .dg-slider {
+  background: #404040;
 }
-html.dg-width-wide {
-  --dg-content-width: 60rem;
+.dg-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid rgb(0 0 0 / 0.15);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  transition: transform 0.15s ease;
+}
+.dg-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+.dg-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid rgb(0 0 0 / 0.15);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  transition: transform 0.15s ease;
+}
+.dg-slider::-moz-range-thumb:hover {
+  transform: scale(1.15);
 }
 
 /* ===== 用户气泡重点色（hc-accent-*，色值与 happychat 一致）=====

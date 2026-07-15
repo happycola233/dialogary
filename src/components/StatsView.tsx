@@ -230,47 +230,49 @@ function CalendarHeatmap({ stats, viz }: { stats: Stats; viz: Viz }) {
   }, [doc])
 
   return (
-    <div className="flex flex-col gap-4 overflow-x-auto pb-1">
-      {stats.calendar.map(({ year, days, max }) => {
-        const jan1 = new Date(`${year}-01-01T00:00:00Z`)
-        const offset = jan1.getUTCDay()
-        return (
-          <div key={year} className="min-w-max">
-            <div className="mb-1.5 text-xs font-medium text-neutral-500 dark:text-neutral-400">{year}</div>
-            <div className="grid grid-flow-col gap-[2px]" style={{ gridTemplateRows: 'repeat(7, 10px)', gridAutoColumns: '10px' }}>
-              {days.map((d, i) => {
-                const level = d.count === 0 ? 0 : 1 + Math.min(4, Math.floor((4 * (d.count - 1)) / Math.max(1, max - 1)))
-                const cell = (
-                  <div
-                    key={d.date}
-                    title={`${d.date} · ${d.count} 条`}
-                    className={d.count > 0 ? 'cursor-pointer rounded-[2px] hover:ring-1 hover:ring-neutral-400' : 'rounded-[2px]'}
-                    style={{
-                      background: viz.calendar[level],
-                      gridRow: ((offset + i) % 7) + 1,
-                      gridColumn: Math.floor((offset + i) / 7) + 1,
-                    }}
-                    onClick={() => {
-                      const id = dateToMsg.get(d.date)
-                      if (id) {
-                        setView('chat')
-                        requestJump(id)
-                      }
-                    }}
-                  />
-                )
-                return cell
-              })}
+    // 内层 w-max + mx-auto：放得下时水平居中，放不下时照常横向滚动
+    <div className="hc-scrollbar overflow-x-auto pb-1">
+      <div className="mx-auto flex w-max flex-col gap-4">
+        {stats.calendar.map(({ year, days, max }) => {
+          const jan1 = new Date(`${year}-01-01T00:00:00Z`)
+          const offset = jan1.getUTCDay()
+          return (
+            <div key={year}>
+              <div className="mb-1.5 text-xs font-medium text-neutral-500 dark:text-neutral-400">{year}</div>
+              <div className="grid grid-flow-col gap-[2px]" style={{ gridTemplateRows: 'repeat(7, 10px)', gridAutoColumns: '10px' }}>
+                {days.map((d, i) => {
+                  const level = d.count === 0 ? 0 : 1 + Math.min(4, Math.floor((4 * (d.count - 1)) / Math.max(1, max - 1)))
+                  return (
+                    <div
+                      key={d.date}
+                      title={`${d.date} · ${d.count} 条`}
+                      className={d.count > 0 ? 'cursor-pointer rounded-[2px] hover:ring-1 hover:ring-neutral-400' : 'rounded-[2px]'}
+                      style={{
+                        background: viz.calendar[level],
+                        gridRow: ((offset + i) % 7) + 1,
+                        gridColumn: Math.floor((offset + i) / 7) + 1,
+                      }}
+                      onClick={() => {
+                        const id = dateToMsg.get(d.date)
+                        if (id) {
+                          setView('chat')
+                          requestJump(id)
+                        }
+                      }}
+                    />
+                  )
+                })}
+              </div>
             </div>
-          </div>
-        )
-      })}
-      <div className="flex items-center gap-1.5 text-[11px] text-neutral-400 dark:text-neutral-500">
-        少
-        {viz.calendar.map((c, i) => (
-          <span key={i} className="h-[10px] w-[10px] rounded-[2px]" style={{ background: c }} />
-        ))}
-        多
+          )
+        })}
+        <div className="flex items-center gap-1.5 text-[11px] text-neutral-400 dark:text-neutral-500">
+          少
+          {viz.calendar.map((c, i) => (
+            <span key={i} className="h-[10px] w-[10px] rounded-[2px]" style={{ background: c }} />
+          ))}
+          多
+        </div>
       </div>
     </div>
   )

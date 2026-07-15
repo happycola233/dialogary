@@ -1,10 +1,11 @@
-import { Check, X } from 'lucide-react'
+import { Check, RotateCcw, X } from 'lucide-react'
 import clsx from 'clsx'
 import { useState } from 'react'
 import {
   ACCENT_OPTIONS,
-  FONT_OPTIONS,
-  WIDTH_OPTIONS,
+  DEFAULT_APPEARANCE,
+  FONT_RANGE,
+  WIDTH_RANGE,
   applyAppearance,
   getAppearance,
   type Appearance,
@@ -49,9 +50,17 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
             <X size={15} />
           </button>
         </div>
-        <div className="space-y-5 px-4 py-4">
-          <SettingRow label="气泡颜色">
-            <div className="flex items-center gap-2">
+        <div className="divide-y divide-neutral-100 px-5 dark:divide-neutral-800">
+          <section className="py-4">
+            <div className="flex items-baseline justify-between">
+              <span className="text-[13px] font-medium text-neutral-700 dark:text-neutral-200">
+                气泡颜色
+              </span>
+              <span className="text-xs text-neutral-400 dark:text-neutral-500">
+                {ACCENT_OPTIONS.find((o) => o.value === appearance.accent)?.label}
+              </span>
+            </div>
+            <div className="mt-3 flex items-center gap-2.5">
               {ACCENT_OPTIONS.map((o) => {
                 const active = appearance.accent === o.value
                 return (
@@ -62,7 +71,7 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
                     aria-pressed={active}
                     onClick={() => update({ accent: o.value })}
                     className={clsx(
-                      'flex h-7 w-7 items-center justify-center rounded-full transition-shadow',
+                      'flex h-8 w-8 items-center justify-center rounded-full transition-[transform,box-shadow] hover:scale-110',
                       active &&
                         'ring-2 ring-neutral-400 ring-offset-2 ring-offset-white dark:ring-neutral-500 dark:ring-offset-neutral-900',
                     )}
@@ -73,73 +82,93 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
                 )
               })}
             </div>
-          </SettingRow>
-          <SettingRow label="内容宽度" hint="聊天正文的最大宽度">
-            <Segmented
-              options={WIDTH_OPTIONS}
-              value={appearance.width}
-              onChange={(width) => update({ width })}
-            />
-          </SettingRow>
-          <SettingRow label="消息字号">
-            <Segmented
-              options={FONT_OPTIONS}
-              value={appearance.font}
-              onChange={(font) => update({ font })}
-            />
-          </SettingRow>
+          </section>
+          <SliderRow
+            label="内容宽度"
+            value={appearance.contentWidth}
+            min={WIDTH_RANGE.min}
+            max={WIDTH_RANGE.max}
+            unit="px"
+            onChange={(contentWidth) => update({ contentWidth })}
+          />
+          <SliderRow
+            label="消息字号"
+            value={appearance.fontSize}
+            min={FONT_RANGE.min}
+            max={FONT_RANGE.max}
+            unit="px"
+            onChange={(fontSize) => update({ fontSize })}
+          />
+        </div>
+        <div className="flex items-center justify-between border-t border-neutral-200/80 px-5 py-3 dark:border-neutral-800">
+          <button
+            type="button"
+            onClick={() => {
+              setAppearance(DEFAULT_APPEARANCE)
+              applyAppearance(DEFAULT_APPEARANCE)
+            }}
+            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+          >
+            <RotateCcw size={13} />
+            恢复默认
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg bg-indigo-500 px-3.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-600 dark:bg-indigo-500/80 dark:hover:bg-indigo-500"
+          >
+            完成
+          </button>
         </div>
       </div>
     </div>
   )
 }
 
-function SettingRow({
+function SliderRow({
   label,
-  hint,
-  children,
-}: {
-  label: string
-  hint?: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <div>
-        <div className="text-[13px] font-medium text-neutral-700 dark:text-neutral-200">{label}</div>
-        {hint && <div className="mt-0.5 text-[11px] text-neutral-400 dark:text-neutral-500">{hint}</div>}
-      </div>
-      {children}
-    </div>
-  )
-}
-
-function Segmented<T extends string>({
-  options,
   value,
+  min,
+  max,
+  unit,
   onChange,
 }: {
-  options: { value: T; label: string }[]
-  value: T
-  onChange: (v: T) => void
+  label: string
+  value: number
+  min: number
+  max: number
+  unit: string
+  onChange: (v: number) => void
 }) {
   return (
-    <div className="flex rounded-lg bg-neutral-100 p-0.5 dark:bg-neutral-800">
-      {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          onClick={() => onChange(o.value)}
-          className={clsx(
-            'rounded-md px-3 py-1 text-xs transition-colors',
-            o.value === value
-              ? 'bg-white text-neutral-800 shadow-sm dark:bg-neutral-600/70 dark:text-neutral-100'
-              : 'text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200',
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
+    <section className="py-4">
+      <div className="flex items-center justify-between">
+        <span className="text-[13px] font-medium text-neutral-700 dark:text-neutral-200">{label}</span>
+        <span className="rounded-md bg-neutral-100 px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
+          {value}
+          {unit}
+        </span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={1}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="dg-slider mt-3 w-full"
+        aria-label={label}
+      />
+      <div className="mt-1 flex justify-between font-mono text-[10px] tabular-nums text-neutral-300 dark:text-neutral-600">
+        <span>
+          {min}
+          {unit}
+        </span>
+        <span>
+          {max}
+          {unit}
+        </span>
+      </div>
+    </section>
   )
 }

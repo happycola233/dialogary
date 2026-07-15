@@ -9,15 +9,27 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const doc = useAppStore((s) => s.doc)
   const filter = useAppStore((s) => s.filter)
   const activeSession = useAppStore((s) => s.activeSession)
+  const jumping = useAppStore((s) => s.jumpTarget !== null)
   const requestJump = useAppStore((s) => s.requestJump)
   const listRef = useRef<HTMLDivElement>(null)
 
-  // 当前节变化时让高亮行保持可见
+  // 当前节变化时让高亮行保持可见。手动只滚侧栏自己的容器——
+  // scrollIntoView 会波及所有可滚动祖先，也不认识吸顶月份头的遮挡。
+  // 跳转动画期间冻结：activeSession 会连续扫过途经的日期，跟着滚只会让
+  // 侧栏乱跳；等跳转结束（jumping 变回 false）再一次性校正到最终位置。
   useEffect(() => {
-    listRef.current
-      ?.querySelector(`[data-nav-session="${activeSession}"]`)
-      ?.scrollIntoView({ block: 'nearest' })
-  }, [activeSession])
+    if (jumping) return
+    const list = listRef.current
+    const row = list?.querySelector<HTMLElement>(`[data-nav-session="${activeSession}"]`)
+    if (!list || !row) return
+    const listRect = list.getBoundingClientRect()
+    const rowRect = row.getBoundingClientRect()
+    const stickyH = 34 // 吸顶月份头高度：行从上方进入时不被它盖住
+    const pad = 8 // 从下方进入时不贴死底边
+    if (rowRect.top < listRect.top + stickyH) list.scrollTop += rowRect.top - listRect.top - stickyH
+    else if (rowRect.bottom > listRect.bottom - pad)
+      list.scrollTop += rowRect.bottom - listRect.bottom + pad
+  }, [activeSession, jumping])
 
   if (!doc) return null
 
@@ -27,7 +39,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const jumpTo = (s: DerivedSession) => {
     const first = filter === 'all' ? s.messages[0] : s.messages.find((m) => m.role === filter)
     if (first) {
-      requestJump(first.id)
+      requestJump(first.id, { smooth: true })
       onNavigate?.()
     }
   }
@@ -48,6 +60,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                 key={s.index}
                 type="button"
                 data-nav-session={s.index}
+                title={[s.date, s.weekday, s.title].filter(Boolean).join(' · ')}
                 onClick={() => jumpTo(s)}
                 className={clsx(
                   'flex w-full items-baseline gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] transition-colors',

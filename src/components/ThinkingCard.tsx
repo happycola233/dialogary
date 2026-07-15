@@ -31,8 +31,9 @@ export function ThinkingCard({ thinking }: { thinking: Thinking }) {
       )}
     </>
   )
+  // 比正文小一号：这是元信息行，不该和消息正文抢注意力
   const statusClass =
-    'hc-reasoning-status inline-flex items-center gap-2 text-[15px] leading-7 transition-colors'
+    'hc-reasoning-status inline-flex items-center gap-2 text-[13px] leading-6 transition-colors'
 
   return (
     <div className="hc-reasoning mb-1.5 space-y-1">
@@ -58,7 +59,7 @@ export function ThinkingCard({ thinking }: { thinking: Thinking }) {
           aria-hidden={!open}
         >
           <div className="min-h-0 overflow-hidden">
-            <div className="pt-1 pr-2 pb-1">
+            <div className="space-y-2.5 pt-1 pr-2 pb-1">
               {sections.map((sec, i) => (
                 <section key={i} className="grid grid-cols-[14px_minmax(0,1fr)] gap-x-2">
                   {sec.title && (

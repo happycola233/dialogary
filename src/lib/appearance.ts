@@ -1,21 +1,29 @@
 /**
  * 外观偏好：气泡重点色 / 正文内容宽度 / 消息字号。
- * 与 happychat 相同的应用管线：偏好 → <html> 上的类 → index.css 里的 CSS 变量。
+ * 气泡色沿用 happychat 管线（<html> 类 → CSS 变量）；宽度与字号为连续数值，
+ * 直接写内联 CSS 变量（--dg-content-width / --hc-msg-font）。
  * main.tsx 在渲染前调用 initAppearance()，避免首屏样式跳动。
  */
 export type AccentColor = 'default' | 'blue' | 'green' | 'yellow' | 'pink' | 'orange' | 'purple'
-export type ContentWidth = 'narrow' | 'standard' | 'wide'
-export type MessageFont = 'small' | 'medium' | 'large'
 
 export interface Appearance {
   accent: AccentColor
-  width: ContentWidth
-  font: MessageFont
+  /** 正文最大宽度，px */
+  contentWidth: number
+  /** 消息字号，px */
+  fontSize: number
 }
 
 const STORAGE_KEY = 'dialogary-appearance'
 
-export const DEFAULT_APPEARANCE: Appearance = { accent: 'default', width: 'standard', font: 'medium' }
+export const WIDTH_RANGE = { min: 560, max: 1280, default: 768 }
+export const FONT_RANGE = { min: 13, max: 18, default: 15 }
+
+export const DEFAULT_APPEARANCE: Appearance = {
+  accent: 'default',
+  contentWidth: WIDTH_RANGE.default,
+  fontSize: FONT_RANGE.default,
+}
 
 /** 色板 swatch 色值与 happychat 的 ACCENT_OPTIONS 一致 */
 export const ACCENT_OPTIONS: { value: AccentColor; label: string; light: string; dark: string }[] = [
@@ -28,32 +36,31 @@ export const ACCENT_OPTIONS: { value: AccentColor; label: string; light: string;
   { value: 'purple', label: '紫色', light: '#8952ee', dark: '#7849d1' },
 ]
 
-export const WIDTH_OPTIONS: { value: ContentWidth; label: string }[] = [
-  { value: 'narrow', label: '窄' },
-  { value: 'standard', label: '适中' },
-  { value: 'wide', label: '宽' },
-]
-
-export const FONT_OPTIONS: { value: MessageFont; label: string }[] = [
-  { value: 'small', label: '小' },
-  { value: 'medium', label: '中' },
-  { value: 'large', label: '大' },
-]
-
 const ACCENTS = new Set(ACCENT_OPTIONS.map((o) => o.value))
-const WIDTHS = new Set(WIDTH_OPTIONS.map((o) => o.value))
-const FONTS = new Set(FONT_OPTIONS.map((o) => o.value))
+
+// 旧版本的档位制取值 → 数值迁移
+const LEGACY_WIDTH: Record<string, number> = { narrow: 672, standard: 768, wide: 960 }
+const LEGACY_FONT: Record<string, number> = { small: 14, medium: 15, large: 17 }
+
+function clamp(n: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, n))
+}
+
+function numberOf(value: unknown, legacy: Record<string, number>, range: { min: number; max: number; default: number }): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return clamp(Math.round(value), range.min, range.max)
+  if (typeof value === 'string' && legacy[value] !== undefined) return legacy[value]!
+  return range.default
+}
 
 export function getAppearance(): Appearance {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return DEFAULT_APPEARANCE
-    const parsed: unknown = JSON.parse(raw)
-    const p = parsed as Partial<Record<keyof Appearance, unknown>>
+    const p = JSON.parse(raw) as Partial<Record<'accent' | 'width' | 'font' | 'contentWidth' | 'fontSize', unknown>>
     return {
       accent: ACCENTS.has(p.accent as AccentColor) ? (p.accent as AccentColor) : DEFAULT_APPEARANCE.accent,
-      width: WIDTHS.has(p.width as ContentWidth) ? (p.width as ContentWidth) : DEFAULT_APPEARANCE.width,
-      font: FONTS.has(p.font as MessageFont) ? (p.font as MessageFont) : DEFAULT_APPEARANCE.font,
+      contentWidth: numberOf(p.contentWidth ?? p.width, LEGACY_WIDTH, WIDTH_RANGE),
+      fontSize: numberOf(p.fontSize ?? p.font, LEGACY_FONT, FONT_RANGE),
     }
   } catch {
     return DEFAULT_APPEARANCE
@@ -62,13 +69,12 @@ export function getAppearance(): Appearance {
 
 function applyDom(a: Appearance): void {
   const el = document.documentElement
-  // 默认档不加类（:root 已定义默认变量），非默认档加对应类
   for (const o of ACCENT_OPTIONS) el.classList.remove(`hc-accent-${o.value}`)
   if (a.accent !== 'default') el.classList.add(`hc-accent-${a.accent}`)
-  for (const o of WIDTH_OPTIONS) el.classList.remove(`dg-width-${o.value}`)
-  if (a.width !== 'standard') el.classList.add(`dg-width-${a.width}`)
-  for (const o of FONT_OPTIONS) el.classList.remove(`hc-font-${o.value}`)
-  if (a.font !== 'medium') el.classList.add(`hc-font-${a.font}`)
+  // 旧版本的档位类清理（升级用户可能残留）
+  el.classList.remove('dg-width-narrow', 'dg-width-wide', 'hc-font-small', 'hc-font-large')
+  el.style.setProperty('--dg-content-width', `${a.contentWidth}px`)
+  el.style.setProperty('--hc-msg-font', `${a.fontSize}px`)
 }
 
 /** 持久化并立即应用 */

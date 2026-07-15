@@ -40,6 +40,8 @@ interface AppState {
   resolveAsset: AssetResolver
   /** 跳转请求：ChatPane 消费后清空（配合 forcedIds 强制挂载 + 滚动定位） */
   jumpTarget: string | null
+  /** 本次跳转是否平滑滚动（目录点击用） */
+  jumpSmooth: boolean
   /** 被强制同步挂载的消息 id（跳转目标绕过懒挂载） */
   forcedIds: ReadonlySet<string>
   /** 当前滚动位置所在的日期节（大纲高亮用） */
@@ -65,7 +67,7 @@ interface AppState {
   setFilter: (f: RoleFilter) => void
   setView: (v: AppView) => void
   setExpandAllThinking: (v: boolean) => void
-  requestJump: (id: string, opts?: { flash?: boolean }) => void
+  requestJump: (id: string, opts?: { flash?: boolean; smooth?: boolean }) => void
   clearJump: () => void
   setActiveSession: (index: number) => void
   setSearchOpen: (open: boolean) => void
@@ -85,6 +87,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   expandAllThinking: false,
   resolveAsset: serverAssetResolver,
   jumpTarget: null,
+  jumpSmooth: false,
   forcedIds: new Set<string>(),
   activeSession: 0,
   flashId: null,
@@ -188,6 +191,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   requestJump: (id, opts) =>
     set((s) => ({
       jumpTarget: id,
+      jumpSmooth: !!opts?.smooth,
       view: 'chat',
       forcedIds: new Set(s.forcedIds).add(id),
       flashId: opts?.flash ? id : s.flashId,
