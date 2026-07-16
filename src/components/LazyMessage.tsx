@@ -1,103 +1,127 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { restoreAnchor } from '../lib/scrollAnchoring'
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
+import {
+  hasNativeScrollAnchoring,
+  observeLazyMessageVisibility,
+  observeLegacyMessageSize,
+} from '../lib/lazyRendering'
+import { estimateMessagePlaceholderHeight } from '../lib/messageHeight'
 import type { DerivedMessage } from '../model/derive'
 import { useAppStore } from '../model/store'
 import { MessageItem } from './MessageItem'
 
-/** 共享 IntersectionObserver：进入扩展视口（上下各两屏）才真正渲染 react-markdown */
-let sharedObserver: IntersectionObserver | null = null
-const pending = new Map<Element, () => void>()
-
-function observe(el: Element, onVisible: () => void) {
-  sharedObserver ??= new IntersectionObserver(
-    (entries) => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting) continue
-        const cb = pending.get(entry.target)
-        if (cb) {
-          pending.delete(entry.target)
-          sharedObserver!.unobserve(entry.target)
-          cb()
-        }
-      }
-    },
-    { rootMargin: '200% 0px' },
-  )
-  pending.set(el, onVisible)
-  sharedObserver.observe(el)
-  return () => {
-    pending.delete(el)
-    sharedObserver?.unobserve(el)
-  }
+interface PendingMountGeometry {
+  root: HTMLElement
+  height: number
+  wasAboveViewport: boolean
 }
 
 /**
- * 共享 ResizeObserver：任何消息尺寸变化（估算高度 → 真实高度、图片/公式加载…）
- * 后做一次滚动锚定回写，防止视口内容被顶开。机制详见 lib/scrollAnchoring.ts。
+ * 懒挂载消息：稳定 shell 始终保留同一个 id/DOM 身份。
+ * 首次挂载先用 content-visibility:visible 强制得到真实高度；量到后才切回 auto，
+ * 从而让 contain-intrinsic-block-size 使用可靠的 remembered size，而不是坏估值。
  */
-let sizeObserver: ResizeObserver | null = null
+export const LazyMessage = memo(function LazyMessage({ msg }: { msg: DerivedMessage }) {
+  const forced = useAppStore((state) => state.forcedIds.has(msg.id))
+  const flashing = useAppStore((state) => state.flashId === msg.id)
+  const clearFlash = useAppStore((state) => state.clearFlash)
+  const [revealedMessage, setRevealedMessage] = useState<DerivedMessage | null>(null)
+  const [measurement, setMeasurement] = useState<{ message: DerivedMessage; height: number } | null>(null)
+  const shellRef = useRef<HTMLDivElement>(null)
+  const pendingMountGeometryRef = useRef<PendingMountGeometry | null>(null)
+  const currentMessageRef = useRef(msg)
 
-function observeSize(el: Element) {
-  sizeObserver ??= new ResizeObserver(() => restoreAnchor())
-  sizeObserver.observe(el)
-  return () => sizeObserver?.unobserve(el)
-}
-
-/** 占位高度估算：只影响挂载前滚动条准确性 */
-function estimateHeight(msg: DerivedMessage): number {
-  let h = Math.min(4000, Math.max(64, msg.contentChars * 0.55))
-  if (msg.attachments.length) h += 190
-  if (msg.thinking) h += 44
-  return Math.round(h)
-}
-
-/**
- * 懒挂载消息：占位 div → 进入扩展视口后挂载（此后不卸载），
- * 挂载后由 content-visibility 继续跳过屏外的重排重绘。
- */
-export function LazyMessage({ msg }: { msg: DerivedMessage }) {
-  const forced = useAppStore((s) => s.forcedIds.has(msg.id))
-  const flashing = useAppStore((s) => s.flashId === msg.id)
-  const clearFlash = useAppStore((s) => s.clearFlash)
-  const [visible, setVisible] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  const mountedRef = useRef<HTMLDivElement>(null)
+  const visible = revealedMessage === msg
   const mounted = visible || forced
+  const measuredHeight = measurement?.message === msg ? measurement.height : null
+  const estimatedHeight = useMemo(() => estimateMessagePlaceholderHeight(msg), [msg])
 
-  useEffect(() => {
-    if (mounted || !ref.current) return
-    return observe(ref.current, () => setVisible(true))
-  }, [mounted])
-
-  // 占位符 → 真实内容的替换在本次 commit 内改变布局；绘制前先做一次锚定回写
-  // （useLayoutEffect 在 paint 之前，首个 getBoundingClientRect 会强制同步布局，
-  // 因此同一批挂载只需任意一个回写即可全部纠正）。后续异步渲染由 RO 兜底。
   useLayoutEffect(() => {
-    if (mounted) restoreAnchor()
-  }, [mounted])
+    pendingMountGeometryRef.current = null
+    currentMessageRef.current = msg
+  }, [msg])
 
-  // 挂载后监听尺寸变化，持续锚定
   useEffect(() => {
-    if (!mounted || !mountedRef.current) return
-    return observeSize(mountedRef.current)
-  }, [mounted])
+    if (mounted || !shellRef.current) return
+    const shell = shellRef.current
+    const scrollRoot = shell.closest('main')
+    if (!(scrollRoot instanceof HTMLElement) || typeof IntersectionObserver === 'undefined') {
+      setRevealedMessage(msg)
+      return
+    }
+    return observeLazyMessageVisibility(scrollRoot, shell, () => {
+      if (currentMessageRef.current !== msg) return
+      const shellRect = shell.getBoundingClientRect()
+      pendingMountGeometryRef.current = {
+        root: scrollRoot,
+        height: shellRect.height,
+        wasAboveViewport: shellRect.bottom <= scrollRoot.getBoundingClientRect().top + 0.5,
+      }
+      setRevealedMessage(msg)
+    })
+  }, [mounted, msg])
+
+  useLayoutEffect(() => {
+    const shell = shellRef.current
+    if (!mounted || !shell) return
+
+    // 此时 shell 仍是 content-visibility:visible；同步读布局可确保首个 remembered size 真实可靠。
+    const height = shell.getBoundingClientRect().height
+    const pendingGeometry = pendingMountGeometryRef.current
+    pendingMountGeometryRef.current = null
+    if (
+      !hasNativeScrollAnchoring &&
+      pendingGeometry?.wasAboveViewport &&
+      pendingGeometry.root.contains(shell) &&
+      useAppStore.getState().jumpTarget === null
+    ) {
+      pendingGeometry.root.scrollTop += height - pendingGeometry.height
+    }
+    setMeasurement({ message: msg, height })
+
+    const scrollRoot = shell.closest('main')
+    if (
+      hasNativeScrollAnchoring ||
+      !(scrollRoot instanceof HTMLElement) ||
+      typeof ResizeObserver === 'undefined'
+    ) {
+      return
+    }
+    return observeLegacyMessageSize(shell, scrollRoot, height)
+  }, [mounted, msg])
 
   useEffect(() => {
     if (!flashing) return
-    const t = setTimeout(clearFlash, 1800)
-    return () => clearTimeout(t)
+    const timeout = setTimeout(clearFlash, 1800)
+    return () => clearTimeout(timeout)
   }, [flashing, clearFlash])
 
+  let style: CSSProperties
   if (!mounted) {
-    return <div ref={ref} id={msg.id} className="scroll-mt-14" style={{ height: estimateHeight(msg) }} />
+    style = { height: estimatedHeight, overflowAnchor: 'none' }
+  } else if (!hasNativeScrollAnchoring) {
+    // 旧 Safari 对 skipped content 不可靠地派发 ResizeObserver；保持 visible 才能稳定补偿异步变化。
+    style = { contentVisibility: 'visible', overflowAnchor: 'auto' }
+  } else if (measuredHeight === null) {
+    style = { contentVisibility: 'visible', overflowAnchor: 'auto' }
+  } else {
+    style = {
+      contentVisibility: 'auto',
+      containIntrinsicBlockSize: `auto ${measuredHeight}px`,
+      overflowAnchor: 'auto',
+    }
   }
+
   return (
     <div
-      ref={mountedRef}
-      className={flashing ? 'flash-highlight rounded-xl' : undefined}
-      style={{ contentVisibility: 'auto', containIntrinsicSize: `auto ${estimateHeight(msg)}px` }}
+      ref={shellRef}
+      id={msg.id}
+      data-message-mounted={mounted ? 'true' : 'false'}
+      aria-hidden={mounted ? undefined : true}
+      className={`scroll-mt-14 ${flashing ? 'flash-highlight rounded-xl' : ''}`}
+      style={style}
     >
-      <MessageItem msg={msg} />
+      {mounted && <MessageItem msg={msg} />}
     </div>
   )
-}
+})

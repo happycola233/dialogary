@@ -24,6 +24,7 @@ const SIDEBAR_DEFAULT = 240
 export default function App() {
   const load = useAppStore((s) => s.load)
   const bootstrap = useAppStore((s) => s.bootstrap)
+  const jumping = useAppStore((s) => s.jumpTarget !== null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     () => localStorage.getItem('dialogary-sidebar') === 'collapsed',
@@ -169,10 +170,10 @@ export default function App() {
                 </div>
               </div>
             )}
-            {/* overflow-anchor 关闭：滚动锚定由 lib/scrollAnchoring 手动完成，避免双重校正 */}
+            {/* 普通阅读交给浏览器原生滚动锚定；目录动画期间保持单一 scrollTop 写入者。 */}
             <main
               className="hc-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain"
-              style={{ overflowAnchor: 'none' }}
+              style={{ overflowAnchor: jumping ? 'none' : 'auto' }}
             >
               <ViewSwitch />
             </main>

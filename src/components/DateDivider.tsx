@@ -9,8 +9,9 @@ export function DateDivider({ session, count }: { session: DerivedSession; count
   if (session.title) parts.push(session.title)
   if (parts.length === 0) parts.push('未标日期')
 
+  // 吸顶日期只负责导航提示，不参与浏览器的阅读锚点选择。
   return (
-    <div className="sticky top-0 z-10 flex justify-center py-2.5">
+    <div className="sticky top-0 z-10 flex justify-center py-2.5" style={{ overflowAnchor: 'none' }}>
       <div className="flex items-center gap-1.5 rounded-full border border-neutral-200/80 bg-white/85 px-3.5 py-1 text-xs text-neutral-500 shadow-sm backdrop-blur dark:border-neutral-800 dark:bg-black/85 dark:text-neutral-400">
         <span className="font-medium">{parts.join(' · ')}</span>
         <span className="text-neutral-300 dark:text-neutral-600">·</span>

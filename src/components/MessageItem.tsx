@@ -15,7 +15,7 @@ export const MessageItem = memo(function MessageItem({ msg }: { msg: DerivedMess
 
 function UserMessage({ msg }: { msg: DerivedMessage }) {
   return (
-    <div id={msg.id} className="flex scroll-mt-14 flex-col items-end py-2.5">
+    <div className="flex flex-col items-end py-2.5">
       <AttachmentList attachments={msg.attachments} align="end" />
       {msg.content && (
         <div className="hc-user-bubble max-w-[85%] rounded-2xl px-4 py-2.5">
@@ -36,7 +36,7 @@ function UserMessage({ msg }: { msg: DerivedMessage }) {
 function AiMessage({ msg }: { msg: DerivedMessage }) {
   const Icon = msg.role === 'system' ? TerminalSquare : Bot
   return (
-    <div id={msg.id} className="scroll-mt-14 py-2.5">
+    <div className="py-2.5">
       <div className="mb-1.5 flex items-center gap-2 text-xs text-neutral-400 dark:text-neutral-500">
         <Icon size={14} />
         {msg.role === 'system' && <span>system</span>}
