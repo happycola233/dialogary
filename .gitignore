@@ -8,3 +8,5 @@ public/data/
 .DS_Store
 
 .devfiles/
+
+.tmp/
