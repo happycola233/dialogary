@@ -27,6 +27,28 @@ const derive = (sessions: Session[]) =>
   deriveDoc({ format: 'chatlog-md/2', meta: {}, sessions, issues: [] } as ChatDoc, [])
 
 describe('统计的用量口径', () => {
+  it('整轮思考耗时只按消息统计一次，关闭思考正文仍保留真实零值与覆盖率', () => {
+    const document = derive([
+      session('2026-09-19', [
+        message({
+          meta: { 'x-generation': { reasoning_duration_ms: 12500 } },
+          parts: [
+            { kind: 'reasoning', text: '第一段' },
+            { kind: 'reasoning', text: '第二段' },
+          ],
+        }),
+        message({ meta: { 'x-generation': { reasoning_duration_ms: 0 } } }),
+        message({ parts: [{ kind: 'reasoning', text: '未记录耗时' }] }),
+      ]),
+    ])
+    expect(document.messages.map((item) => item.thinkingSeconds)).toEqual([12.5, 0, null])
+    const stats = computeStats(document)
+    expect(stats.thinkingCount).toBe(3)
+    expect(stats.thinkingDurationRecorded).toBe(2)
+    expect(stats.thinkingTotalSeconds).toBe(12.5)
+    expect(stats.thinkingChars).toBe(11)
+  })
+
   it('输入包含缓存、输出包含推理，总量不重复相加', () => {
     const stats = computeStats(
       derive([

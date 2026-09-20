@@ -233,7 +233,7 @@ export function computeStats(doc: DerivedDoc, filter: StatsFilter = {}): Stats {
       stats.aiChars += chars
     } else stats.systemCount++
     const reasoning = message.parts?.filter((part) => part.kind === 'reasoning') ?? []
-    if (reasoning.length || message.thinking) {
+    if (reasoning.length || message.thinking || message.thinkingSeconds !== null) {
       stats.thinkingCount++
       stats.thinkingChars += reasoning.length
         ? reasoning.reduce((sum, part) => sum + countChars(part.text ?? ''), 0)

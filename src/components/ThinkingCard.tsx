@@ -13,13 +13,19 @@ import { reasoningLabel } from '../process/reasoningTiming'
  * 状态行（标签 + chevron）+ 分节正文（圆点标题 / 竖线正文的两列网格）。
  * 默认折叠；「展开全部思考」开关翻转默认值，单卡点击可覆盖。
  */
-export function ThinkingCard({ thinking }: { thinking: Thinking }) {
+export function ThinkingCard({
+  thinking,
+  totalSeconds,
+}: {
+  thinking: Thinking
+  totalSeconds?: number | null
+}) {
   const expandAll = useAppStore((s) => s.expandAllThinking)
   const [override, setOverride] = useState<boolean | null>(null)
   const open = override ?? expandAll
   const sections = useMemo(() => splitReasoningSections(thinking.text), [thinking.text])
   const hasSummary = sections.length > 0
-  const label = reasoningLabel([], thinking)
+  const label = reasoningLabel([], thinking, totalSeconds)
 
   const statusContent = (
     <>

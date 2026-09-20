@@ -68,7 +68,7 @@ export function deriveDoc(doc: ChatDoc, issues: LintIssue[]): DerivedDoc {
         effectiveDate: m.time ? m.time.slice(0, 10) : s.date,
         effectiveTime: m.time ?? lastTime,
         contentChars: m.content.length,
-        thinkingSeconds: totalReasoningSeconds(m.parts, m.thinking),
+        thinkingSeconds: totalReasoningSeconds(m.parts, m.thinking, m.meta),
         dayContext: {
           title: s.title,
           tags: s.tags,

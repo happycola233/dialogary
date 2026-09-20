@@ -206,6 +206,50 @@ describe('v1 迁移允许变更清单', () => {
     expect(verifyMigration(original, text.replace('  原文  ', '原文')).ok).toBe(false)
     expect(verifyMigration(original, text.replace('<!-- 原始游离注释 -->\n', '')).ok).toBe(false)
   })
+
+  it.each(['LF', 'CRLF'])('普通 Markdown 转义与结构转义混排时可迁移，%s 原文字节不变', (newline) => {
+    const body = String.raw`\# 普通标题
+\## 二级标题
+\## @custom
+\### 三级标题
+\\# 已有双斜杠
+\# @2026-09-20
+\## 🤖 @ai
+\📄 `
+    const input = FM.replace('chatlog-md/2', 'chatlog-md/1') + '# @2026-09-19 · 周六\n\n## @user\n\n' + body + '\n\n## @ai\n\n下一条消息\n'
+    const original = newline === 'CRLF' ? '\uFEFF' + input.replaceAll('\n', '\r\n') : input
+    const { text, report } = migrateV1ToV2(original)
+    expect(report).toMatchObject({ ok: true, messages: 2, rawFragmentsVerified: 2, failures: [] })
+    expect(text).toBe(original.replace('chatlog-md/1', 'chatlog-md/2').replace(' · 周六', ''))
+    const before = parseChatlog(original)
+    const after = parseChatlog(text)
+    expect(first(before).content).toContain('# 普通标题\n## 二级标题')
+    expect(first(after).content).toBe(body.replace('\\# @2026-09-20', '# @2026-09-20').replace('\\## 🤖 @ai', '## 🤖 @ai'))
+    expect(after.sessions[0]!.messages.map((message) => message._source!.raw)).toEqual(before.sessions[0]!.messages.map((message) => message._source!.raw))
+    expect(serializeChatlog(after)).toBe(text)
+  })
+
+  it.each([
+    ['删除普通 Markdown 反斜杠', '\\# 普通标题', '# 普通标题'],
+    ['修改正文文字', '普通标题', '改写标题'],
+    ['增加真实结构转义层', '\\# @2026-09-20', '\\\\# @2026-09-20'],
+  ])('兼容旧转义仍拒绝%s', (_, from, to) => {
+    const original = FM.replace('chatlog-md/2', 'chatlog-md/1') + '## @user\n\n\\# 普通标题\n\\# @2026-09-20\n'
+    const { text } = migrateV1ToV2(original)
+    const report = verifyMigration(original, text.replace(from, to))
+    expect(report.ok).toBe(false)
+    expect(report.rawFragmentsVerified).toBe(0)
+    expect(report.failures).toContain('存在版本声明、纯星期标题以外的原始字节片段变化')
+    expect(report.failures).toContain('日期节 1 消息 1 原始片段变化')
+  })
+
+  it('原文未改但普通文字被解释成 v2 内容块时仍拒绝语义变化', () => {
+    const original = FM.replace('chatlog-md/2', 'chatlog-md/1') + '## @user\n\n<!-- @part answer -->\n\\# 普通标题\n<!-- @endpart -->\n'
+    const { report } = migrateV1ToV2(original)
+    expect(report.ok).toBe(false)
+    expect(report.rawFragmentsVerified).toBe(1)
+    expect(report.failures).toContain('日期节 1 消息 1 字段 content 变化')
+  })
 })
 
 describe('编辑器与工作区写回回归', () => {

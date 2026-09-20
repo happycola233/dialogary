@@ -21,6 +21,7 @@ import { todayString, useAppStore } from '../model/store'
 import type { Attachment, MessagePart } from '../parser/types'
 import { copyToClipboard } from '../lib/clipboard'
 import { AttachmentList } from './AttachmentList'
+import { CitationSources } from './CitationSources'
 import { TimeChip } from './Chips'
 import { ProcessTrack } from './ProcessTrack'
 import { ThinkingCard } from './ThinkingCard'
@@ -37,7 +38,11 @@ function MessageContent({ msg }: { msg: DerivedMessage }) {
   if (!msg.parts?.length)
     return (
       <>
-        {msg.thinking && <ThinkingCard thinking={msg.thinking} />}
+        {msg.thinking ? (
+          <ThinkingCard thinking={msg.thinking} totalSeconds={msg.thinkingSeconds} />
+        ) : (
+          <ProcessTrack reasoningTotalSeconds={msg.thinkingSeconds} />
+        )}
         <AttachmentList
           attachments={msg.attachments}
           align={msg.role === 'user' ? 'end' : undefined}
@@ -67,8 +72,11 @@ function MessageContent({ msg }: { msg: DerivedMessage }) {
         (inline) => inline.path === attachment.path && inline.name === attachment.name,
       ),
   )
+  const processGroupCount = groups.filter((group) => group.process).length
   return (
     <>
+      {/* 过程被正文拆成多组时，总时长属于整条消息，只展示一次，不复制到任何一段。 */}
+      {processGroupCount !== 1 && <ProcessTrack reasoningTotalSeconds={msg.thinkingSeconds} />}
       <AttachmentList
         attachments={leadingAttachments}
         align={msg.role === 'user' ? 'end' : undefined}
@@ -76,7 +84,11 @@ function MessageContent({ msg }: { msg: DerivedMessage }) {
       {groups.map((group, index) => (
         <Fragment key={group.part?.id ?? index}>
           {group.process ? (
-            <ProcessTrack parts={group.process} expanded={expanded} />
+            <ProcessTrack
+              parts={group.process}
+              expanded={expanded}
+              reasoningTotalSeconds={processGroupCount === 1 ? msg.thinkingSeconds : undefined}
+            />
           ) : group.part?.kind === 'answer' ? (
             <div className="my-2 first:mt-0 last:mb-0">
               <Markdown text={group.part.text ?? ''} variant="message" />
@@ -86,6 +98,8 @@ function MessageContent({ msg }: { msg: DerivedMessage }) {
               attachments={group.attachments}
               align={msg.role === 'user' ? 'end' : undefined}
             />
+          ) : group.part?.kind === 'x-citations' ? (
+            <CitationSources part={group.part} />
           ) : (
             <details className="my-3 rounded-xl bg-neutral-50 p-3 text-xs dark:bg-neutral-900">
               <summary>{group.part?.kind}</summary>

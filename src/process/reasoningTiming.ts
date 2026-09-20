@@ -1,25 +1,34 @@
 import { parseThinkingSeconds } from '../lib/format'
-import type { Thinking } from '../parser/types'
+import type { Metadata, Thinking } from '../parser/types'
 
 type TimedPart = { kind: string; data?: unknown }
+
+function durationSeconds(milliseconds: unknown): number | null {
+  return typeof milliseconds === 'number' && Number.isFinite(milliseconds) && milliseconds >= 0
+    ? milliseconds / 1000
+    : null
+}
 
 export function reasoningSeconds(part: TimedPart): number | null {
   if (part.kind !== 'reasoning' || !part.data || typeof part.data !== 'object') return null
   const data = part.data as Record<string, unknown>
-  if (
-    typeof data.duration_ms === 'number' &&
-    Number.isFinite(data.duration_ms) &&
-    data.duration_ms >= 0
-  )
-    return data.duration_ms / 1000
+  const seconds = durationSeconds(data.duration_ms)
+  if (seconds !== null) return seconds
   return typeof data.label === 'string' ? parseThinkingSeconds(data.label) : null
 }
 
-/** 每段时长完整时才汇总，避免把没有记录时长的思考当作零秒。 */
+/** 优先使用消息记录的整轮时长；否则仅在每段时长完整时汇总，不把缺失当成零秒。 */
 export function totalReasoningSeconds(
   parts: TimedPart[] = [],
   thinking?: Thinking | null,
+  meta?: Metadata,
 ): number | null {
+  const generation = meta?.['x-generation']
+  const recorded =
+    generation && typeof generation === 'object'
+      ? durationSeconds((generation as Metadata).reasoning_duration_ms)
+      : null
+  if (recorded !== null) return recorded
   const reasoning = parts.filter((part) => part.kind === 'reasoning')
   if (!reasoning.length) return thinking ? parseThinkingSeconds(thinking.label) : null
   const seconds = reasoning.map(reasoningSeconds)
@@ -29,8 +38,12 @@ export function totalReasoningSeconds(
   return reasoning.length === 1 && thinking ? parseThinkingSeconds(thinking.label) : null
 }
 
-export function reasoningLabel(parts: TimedPart[], thinking?: Thinking | null): string {
-  const seconds = totalReasoningSeconds(parts, thinking)
+export function reasoningLabel(
+  parts: TimedPart[],
+  thinking?: Thinking | null,
+  recordedTotalSeconds?: number | null,
+): string {
+  const seconds = recordedTotalSeconds ?? totalReasoningSeconds(parts, thinking)
   if (seconds !== null) return `已思考 ${Math.floor(seconds)}s`
   if (parts.filter((part) => part.kind === 'reasoning').length > 1) return '思考过程'
   const first = parts.find((part) => part.kind === 'reasoning')

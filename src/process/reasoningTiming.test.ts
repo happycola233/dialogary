@@ -22,4 +22,33 @@ describe('记录中的思考时长', () => {
     expect(reasoningLabel([{ kind: 'reasoning' }])).toBe('思考过程')
     expect(reasoningLabel([{ kind: 'reasoning', data: { duration_ms: 0 } }])).toBe('已思考 0s')
   })
+
+  it('使用消息的整轮思考耗时，不复制给未计时的分段或与分段再次相加', () => {
+    const parts = [
+      { kind: 'reasoning', text: '第一段' },
+      { kind: 'search' },
+      { kind: 'reasoning', text: '第二段' },
+    ]
+    const meta = { 'x-generation': { reasoning_duration_ms: 12500 } }
+    expect(totalReasoningSeconds(parts, null, meta)).toBe(12.5)
+    expect(reasoningLabel(parts, null, 12.5)).toBe('已思考 12s')
+    expect(parts.every((part) => !('data' in part))).toBe(true)
+    expect(
+      totalReasoningSeconds([{ kind: 'reasoning', data: { duration_ms: 2000 } }], null, meta),
+    ).toBe(12.5)
+  })
+
+  it('整轮真实零值与未记录不同，外部文件的非法耗时不覆盖可用分段计时', () => {
+    expect(totalReasoningSeconds([], null, { 'x-generation': { reasoning_duration_ms: 0 } })).toBe(
+      0,
+    )
+    expect(totalReasoningSeconds([], null, { 'x-generation': {} })).toBeNull()
+    for (const value of [-1, Number.NaN, Infinity, '12000', null]) {
+      expect(
+        totalReasoningSeconds([{ kind: 'reasoning', data: { duration_ms: 2000 } }], null, {
+          'x-generation': { reasoning_duration_ms: value },
+        }),
+      ).toBe(2)
+    }
+  })
 })

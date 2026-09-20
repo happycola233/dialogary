@@ -20,10 +20,17 @@ interface Props {
   parts?: Part[]
   thinking?: Thinking | null
   expanded?: boolean
+  /** 仅传入本组完整时长；整条消息分成多组时，完整时长另行展示，不能分摊到各组。 */
+  reasoningTotalSeconds?: number | null
 }
 
 /** 持久化过程轨复用 HappyChat 的行结构与视觉，省去实时生成状态。 */
-export function ProcessTrack({ parts = [], thinking, expanded = false }: Props) {
+export function ProcessTrack({
+  parts = [],
+  thinking,
+  expanded = false,
+  reasoningTotalSeconds,
+}: Props) {
   const contentId = useId()
   const [override, setOverride] = useState<boolean | null>(null)
   const open = override ?? expanded
@@ -43,16 +50,24 @@ export function ProcessTrack({ parts = [], thinking, expanded = false }: Props) 
     .filter((step) => isSearchPart(step.kind))
     .map((step) => searchActionOf(step.kind, step.data))
   const searchPhrases = searchSummaryPhrases(actions)
-  const hasReasoning = steps.some((step) => step.kind === 'reasoning')
+  const hasReasoning =
+    steps.some((step) => step.kind === 'reasoning') || reasoningTotalSeconds != null
   const segments = hasReasoning
-    ? [reasoningLabel(steps, thinking), ...searchPhrases]
+    ? [reasoningLabel(steps, thinking, reasoningTotalSeconds), ...searchPhrases]
     : searchPhrases.length
       ? [`已${searchPhrases[0]}`, ...searchPhrases.slice(1)]
       : ['已完成处理']
   const label = segments.join(' · ')
-  const pureSearch = steps.every((step) => isSearchPart(step.kind))
+  const pureSearch = !hasReasoning && steps.every((step) => isSearchPart(step.kind))
   const xOnly = actions.length > 0 && actions.every((action) => isXSearchActionType(action.type))
-  if (!steps.length) return null
+  if (!steps.length) {
+    if (reasoningTotalSeconds == null) return null
+    return (
+      <div className="hc-reasoning mb-1.5" data-testid="reasoning-total">
+        <span className="hc-reasoning-status text-[15px] leading-7">{label}</span>
+      </div>
+    )
+  }
 
   return (
     <div className="hc-reasoning mb-1.5" data-testid="process-track">

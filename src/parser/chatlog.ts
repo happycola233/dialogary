@@ -9,11 +9,60 @@ export { RE, KNOWN_ROLES }
 const META_START = /^<!--\s*@meta\s*$/
 const PART_START = /^<!--\s*@part\s+([a-zA-Z][\w.-]*)\s*-->\s*$/
 const PART_END = /^<!--\s*@endpart\s*-->\s*$/
+const PART_LITERAL = /^<!--\s*@(?:part|endpart|meta)\b/
+const COMMENT_START = /^ {0,3}<!--/
 const personalKeys = ['id', 'tags', 'reactions', 'mood', 'states', 'starred', 'annotations'] as const
 const weekday = /^(?:周[一二三四五六日天]|星期[一二三四五六日天]|礼拜[一二三四五六日天]|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)$/i
 
 interface Line { text: string; start: number; end: number }
 interface Structure { lines: Line[]; heads: { index: number; kind: 'session' | 'message' }[]; frontEnd: number }
+interface Fence { char: string; length: number }
+
+function openingFence(line: string): Fence | null {
+  const token = /^ {0,3}(`{3,}|~{3,})/.exec(line)
+  if (!token || (token[1]![0] === '`' && line.slice(token[0].length).includes('`'))) return null
+  return { char: token[1]![0]!, length: token[1]!.length }
+}
+
+function closesFence(line: string, fence: Fence): boolean {
+  const token = /^ {0,3}(`{3,}|~{3,})\s*$/.exec(line)?.[1]
+  return !!token && token[0] === fence.char && token.length >= fence.length
+}
+
+/** 写入增加一层、读取剥去一层；已有反斜杠不能被吞掉，也不能不断累加。 */
+function transformSentinel(line: string, explicit: boolean, encode: boolean): string {
+  const literal = line.replace(/^\\+/, '')
+  const sentinel = PART_LITERAL.test(literal) || (!explicit && (
+    RE.SESSION_RE.test(literal) || RE.MSG_RE.test(literal) ||
+    RE.ATTACH_NAME_RE.test(literal) || RE.THINK_RE.test(literal)
+  ))
+  if (!sentinel) return line
+  if (encode) return `\\${line}`
+  return line.startsWith('\\') ? line.slice(1) : line
+}
+
+/** 围栏和真正的 HTML 注释内没有结构转义，必须连已有反斜杠一起保留。 */
+function transformText(text: string, explicit: boolean, encode: boolean): string {
+  let fence: Fence | null = null
+  let comment = false
+  return text.split('\n').map((line) => {
+    if (fence) {
+      if (closesFence(line, fence)) fence = null
+      return line
+    }
+    if (comment) {
+      if (line.includes('-->')) comment = false
+      return line
+    }
+    fence = openingFence(line)
+    if (fence) return line
+    const result = transformSentinel(line, explicit, encode)
+    // 读入时看转义前的原行，不能把还原出的字面 @meta 当成注释起点。
+    const structural = encode ? result : line
+    if (COMMENT_START.test(structural) && !structural.includes('-->')) comment = true
+    return result
+  }).join('\n')
+}
 
 const json = (value: unknown) => JSON.stringify(value)
 const cleanText = (value: string) => value.replace(/\r\n/g, '\n').replace(/^\n+|\n+$/g, '')
@@ -34,7 +83,7 @@ function linesOf(text: string): Line[] {
 }
 
 /** 标记只能出现在 Markdown 顶层；围栏、HTML 注释和过程块内部的标题都是正文。 */
-function structureOf(text: string): Structure {
+function structureOf(text: string, issues: LintIssue[] = []): Structure {
   const lines = linesOf(text)
   let frontEnd = 0
   let start = 0
@@ -43,25 +92,30 @@ function structureOf(text: string): Structure {
     if (end >= 0) { frontEnd = lines[end]!.end; start = end + 1 }
   }
   const heads: Structure['heads'] = []
-  let fence: { char: string; length: number } | null = null
+  let fence: Fence | null = null
+  let fenceLine = 0
   let comment = false
+  let commentLine = 0
   let part = false
   for (let i = start; i < lines.length; i++) {
     const line = lines[i]!.text
-    const fm = /^ {0,3}(`{3,}|~{3,})/.exec(line)
     if (fence) {
-      if (fm && fm[1]![0] === fence.char && fm[1]!.length >= fence.length && line.slice(fm[0].length).trim() === '') fence = null
+      if (closesFence(line, fence)) fence = null
       continue
     }
     if (comment) { if (line.includes('-->')) comment = false; continue }
-    if (fm) { fence = { char: fm[1]![0]!, length: fm[1]!.length }; continue }
+    fence = openingFence(line)
+    if (fence) { fenceLine = i + 1; continue }
     if (PART_START.test(line)) { part = true; continue }
     if (PART_END.test(line)) { part = false; continue }
-    if (/^<!--/.test(line) && !line.includes('-->')) { comment = true; continue }
+    if (COMMENT_START.test(line) && !line.includes('-->')) { comment = true; commentLine = i + 1; continue }
     if (part) continue
     if (RE.SESSION_RE.test(line)) heads.push({ index: i, kind: 'session' })
     else if (RE.MSG_RE.test(line)) heads.push({ index: i, kind: 'message' })
   }
+  // 未闭合内容可能包含“消息头”代码示例；只能报告并保留原文，不能猜测分割位置。
+  if (fence) issues.push({ level: 'error', rule: 'unclosed-fence', line: fenceLine, message: '代码围栏缺少结束标记，后续内容仍属于该围栏；原文已完整保留。' })
+  if (comment) issues.push({ level: 'error', rule: 'unclosed-comment', line: commentLine, message: 'HTML 注释缺少结束标记 -->，后续内容仍属于该注释；原文已完整保留。' })
   return { lines, heads, frontEnd }
 }
 
@@ -168,7 +222,7 @@ function parseBody(raw: string, issues: LintIssue[], lineNumber: number, source?
   const answers: string[] = []
   const legacyContent: string[] = []
   let hasExplicitParts = false
-  let fence: { char: string; length: number } | null = null
+  let fence: Fence | null = null
   let comment = false
   const append = (part: MessagePart, start: number, end: number, style: NonNullable<SourceFragment['bodyParts']>[number]['style']) => {
     parts.push(part)
@@ -189,7 +243,6 @@ function parseBody(raw: string, issues: LintIssue[], lineNumber: number, source?
   for (let i = firstLine; i < lastLine; i++) {
     if (!answer.length) answerStart = i
     const line = lines[i]!
-    const fm = /^ {0,3}(`{3,}|~{3,})/.exec(line)
     if (comment) {
       answer.push(line); legacyContent.push(line)
       if (line.includes('-->')) comment = false
@@ -198,24 +251,28 @@ function parseBody(raw: string, issues: LintIssue[], lineNumber: number, source?
     if (fence) {
       answer.push(line)
       legacyContent.push(line)
-      if (fm && fm[1]![0] === fence.char && fm[1]!.length >= fence.length && line.slice(fm[0].length).trim() === '') fence = null
+      if (closesFence(line, fence)) fence = null
       continue
     }
-    if (fm) { fence = { char: fm[1]![0]!, length: fm[1]!.length }; answer.push(line); legacyContent.push(line); continue }
+    fence = openingFence(line)
+    if (fence) { answer.push(line); legacyContent.push(line); continue }
     const start = PART_START.exec(line)
     if (start) {
       hasExplicitParts = true
       flush()
       let end = i + 1
-      let partFence: { char: string; length: number } | null = null
+      let partFence: Fence | null = null
+      let partComment = false
       for (; end < lines.length; end++) {
         const current = lines[end]!
-        const token = /^ {0,3}(`{3,}|~{3,})/.exec(current)
         if (partFence) {
-          if (token && token[1]![0] === partFence.char && token[1]!.length >= partFence.length && current.slice(token[0].length).trim() === '') partFence = null
+          if (closesFence(current, partFence)) partFence = null
           continue
         }
-        if (token) { partFence = { char: token[1]![0]!, length: token[1]!.length }; continue }
+        if (partComment) { if (current.includes('-->')) partComment = false; continue }
+        partFence = openingFence(current)
+        if (partFence) continue
+        if (COMMENT_START.test(current) && !current.includes('-->')) { partComment = true; continue }
         if (PART_END.test(current)) break
       }
       if (end === lines.length) {
@@ -224,7 +281,7 @@ function parseBody(raw: string, issues: LintIssue[], lineNumber: number, source?
       }
       const partRaw = ['header', ...lines.slice(i + 1, end)].join('\n')
       const parsed = readLeadingMeta(partRaw, issues, lineNumber + i)
-      const part: MessagePart = { kind: start[1]!, text: cleanText(partRaw.slice(parsed.source.bodyStart)).replace(/^\\(<!--\s*@(?:part|endpart|meta)\b)/gm, '$1') }
+      const part: MessagePart = { kind: start[1]!, text: transformText(cleanText(partRaw.slice(parsed.source.bodyStart)), true, false) }
       if (Object.keys(parsed.meta).length) part.data = parsed.meta
       if (typeof parsed.meta.id === 'string') part.id = parsed.meta.id
       append(part, i, end + 1, 'explicit')
@@ -233,7 +290,7 @@ function parseBody(raw: string, issues: LintIssue[], lineNumber: number, source?
       if (part.kind === 'attachment' && (part.data?.kind === 'image' || part.data?.kind === 'file') && typeof part.data.name === 'string') attachments.push({ kind: part.data.kind, name: part.data.name, path: typeof part.data.path === 'string' ? part.data.path : null, meta: isRecord(part.data.meta) ? part.data.meta : {} })
       i = end; continue
     }
-    if (/^<!--/.test(line) && !line.includes('-->')) {
+    if (COMMENT_START.test(line) && !line.includes('-->')) {
       comment = true; answer.push(line); legacyContent.push(line); continue
     }
     const tm = i === firstLine ? RE.THINK_RE.exec(line) : null
@@ -259,7 +316,7 @@ function parseBody(raw: string, issues: LintIssue[], lineNumber: number, source?
       append({ kind: 'attachment', data: { ...att } }, attachmentStart, i + 1, 'attachment')
       continue
     }
-    const decoded = line.replace(RE.ESCAPED_RE, (match) => match.slice(1)).replace(/^\\(<!--\s*@(?:part|endpart|meta)\b)/, '$1')
+    const decoded = transformSentinel(line, false, false)
     answer.push(decoded)
     legacyContent.push(decoded)
   }
@@ -276,8 +333,8 @@ function attachSnapshots(object: Message | Session, source: SourceFragment) {
 }
 
 export function parseChatlog(text: string): ChatDoc {
-  const { lines, heads, frontEnd } = structureOf(text)
   const issues: LintIssue[] = []
+  const { lines, heads, frontEnd } = structureOf(text, issues)
   const front = frontEnd ? text.slice(lines[0]!.end, lines.find((l) => l.end === frontEnd)!.start) : ''
   const frontMeta = readYaml(front, issues, 2)
   const format = typeof frontMeta.format === 'string' ? frontMeta.format : null
@@ -433,26 +490,12 @@ function headerFor(object: Message | Session): string {
 
 /** 普通正文中的结构标记仅在围栏外转义，代码示例保持原样。 */
 function escapeBody(text: string): string {
-  let fence: { char: string; length: number } | null = null
-  return text.split('\n').map((line) => {
-    const fm = /^ {0,3}(`{3,}|~{3,})/.exec(line)
-    if (fence) {
-      if (fm && fm[1]![0] === fence.char && fm[1]!.length >= fence.length && line.slice(fm[0].length).trim() === '') fence = null
-      return line
-    }
-    if (fm) { fence = { char: fm[1]![0]!, length: fm[1]!.length }; return line }
-    return RE.SESSION_RE.test(line) || RE.MSG_RE.test(line) || RE.ATTACH_NAME_RE.test(line) || RE.THINK_RE.test(line) || PART_START.test(line) || PART_END.test(line) || META_START.test(line) || RE.META_RE.test(line) ? `\\${line}` : line
-  }).join('\n')
+  return transformText(text, false, true)
 }
 
 function partText(part: MessagePart, raw?: string): string {
   const meta = { ...part.data, ...(part.id ? { id: part.id } : {}) }
-  let fenced: string | null = null
-  const text = part.text?.split('\n').map((line) => {
-    const token = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1]
-    if (token) { if (!fenced) fenced = token; else if (token[0] === fenced[0] && token.length >= fenced.length) fenced = null; return line }
-    return !fenced && (PART_START.test(line) || PART_END.test(line) || META_START.test(line) || RE.META_RE.test(line)) ? `\\${line}` : line
-  }).join('\n')
+  const text = part.text === undefined ? undefined : transformText(part.text, true, true)
   const source = raw ? readLeadingMeta(raw, [], 0).source : undefined
   return `<!-- @part ${part.kind} -->\n${metadataBlock(meta, '\n', source)}${text ? `${text}\n` : ''}<!-- @endpart -->`
 }
@@ -578,6 +621,19 @@ export function migrateV1ToV2(text: string): { text: string; report: MigrationRe
   return { text: candidate, report: verifyMigration(text, candidate) }
 }
 
+function migrationContentMatches(before: Message, after: Message): boolean {
+  if (before.content === after.content) return true
+  if (before._source!.raw !== after._source!.raw) return false
+  // v1 会剥去普通 Markdown 标题等行首的反斜杠，v2 只解码真正的结构标记。
+  // 仅在原始消息完全相同时兼容这种旧投影；不改变原文，也不放宽结构转义校验。
+  const legacyContent = after.content.split('\n').map((line) =>
+    transformSentinel(line, false, false) === line
+      ? line.replace(RE.ESCAPED_RE, (match) => match.slice(1))
+      : line,
+  ).join('\n')
+  return before.content === legacyContent
+}
+
 export function verifyMigration(source: string, candidate: string): MigrationReport {
   const before = parseChatlog(source)
   const after = parseChatlog(candidate)
@@ -595,8 +651,9 @@ export function verifyMigration(source: string, candidate: string): MigrationRep
     session.messages.forEach((message, mi) => {
       const migrated = target.messages[mi]
       if (!migrated) return
-      const fields = ['role', 'time', 'timePrecision', 'model', 'meta', 'thinking', 'attachments', 'content'] as const
+      const fields = ['role', 'time', 'timePrecision', 'model', 'meta', 'thinking', 'attachments'] as const
       for (const key of fields) if (json(message[key]) !== json(migrated[key])) report.failures.push(`日期节 ${si + 1} 消息 ${mi + 1} 字段 ${key} 变化`)
+      if (!migrationContentMatches(message, migrated)) report.failures.push(`日期节 ${si + 1} 消息 ${mi + 1} 字段 content 变化`)
       if (message._source?.raw === migrated._source?.raw) report.rawFragmentsVerified++
       else report.failures.push(`日期节 ${si + 1} 消息 ${mi + 1} 原始片段变化`)
     })

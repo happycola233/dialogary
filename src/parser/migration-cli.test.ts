@@ -8,7 +8,7 @@ let fixtureRoot: string
 let sourcePath: string
 let candidatePath: string
 let assetRoot: string
-const original = '---\nformat: chatlog-md/1\n---\n# @2026-09-19 · 周六\n\n## 🧑‍💻 @user\n\n📄 [字面文件](assets/exact%20name.txt)\n📄 [编码文件](assets/encoded%20name.txt)\n📄 [百分号文件](assets/100%.txt)\n\n完全虚构的正文。\n'
+const original = '---\nformat: chatlog-md/1\n---\n# @2026-09-19 · 周六\n\n## 🧑‍💻 @user\n\n📄 [字面文件](assets/exact%20name.txt)\n📄 [编码文件](assets/encoded%20name.txt)\n📄 [百分号文件](assets/100%.txt)\n\n完全虚构的正文。\n\\# 普通标题\n'
 
 beforeAll(() => {
   fs.mkdirSync(temporaryRoot, { recursive: true })
