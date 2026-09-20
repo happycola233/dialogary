@@ -1,0 +1,132 @@
+.dg-editor-dialog[open] {
+  animation: dg-editor-enter 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.dg-editor-dialog[open]::backdrop {
+  animation: dg-editor-backdrop 180ms ease-out;
+}
+@keyframes dg-editor-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes dg-editor-backdrop {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.dg-preset-picker {
+  width: 320px;
+  padding: 12px;
+}
+.dg-preset-scroll {
+  max-height: 240px;
+  overflow-y: auto;
+}
+.dg-preset-choice {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  text-align: left;
+  font-size: 13px;
+}
+.dg-preset-choice:hover,
+.dg-preset-choice:focus-visible {
+  background: var(--dg-accent-soft);
+  color: var(--dg-accent);
+  outline: none;
+}
+.dg-preset-choice[aria-pressed='true'] {
+  color: var(--dg-accent);
+}
+.dg-preset-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dg-preset-group {
+  margin: 12px 8px 5px;
+  color: color-mix(in srgb, currentColor 55%, transparent);
+  font-size: 11px;
+}
+.dg-preset-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.dg-preset-inline button {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 8px;
+  padding: 4px 7px;
+  font-size: 12px;
+  color: color-mix(in srgb, currentColor 65%, transparent);
+}
+.dg-preset-inline button:hover {
+  background: var(--dg-accent-soft);
+  color: var(--dg-accent);
+}
+.dg-detail-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+.dg-detail-field-heading {
+  display: flex;
+  height: 25px;
+  align-items: center;
+  justify-content: space-between;
+}
+.dg-detail-field > .relative > input,
+.dg-token-entry > input {
+  height: 42px;
+}
+.dg-token-entry {
+  position: relative;
+}
+.dg-token-entry > input {
+  padding-right: 42px;
+}
+.dg-token-add {
+  position: absolute;
+  inset: 5px 5px 5px auto;
+  width: 32px;
+  display: grid;
+  place-items: center;
+  color: var(--dg-accent);
+  border-radius: 8px;
+}
+.dg-token-add:hover:not(:disabled) {
+  background: var(--dg-accent-soft);
+}
+.dg-token-add:disabled {
+  opacity: 0.35;
+}
+.dg-token-add:focus-visible {
+  outline: 2px solid var(--dg-accent);
+}
+.dg-details-grid > .space-y-2 > span:first-child {
+  display: flex;
+  height: 25px;
+  align-items: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dg-editor-dialog[open],
+  .dg-editor-dialog[open]::backdrop {
+    animation: none;
+  }
+}

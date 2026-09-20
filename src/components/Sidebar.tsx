@@ -1,88 +1,265 @@
+import {
+  BarChart3,
+  BookOpen,
+  Bookmark,
+  ChevronDown,
+  Feather,
+  History,
+  SearchCheck,
+  Search,
+  Settings2,
+  Tags,
+  TextSearch,
+} from 'lucide-react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
-import { useEffect, useRef } from 'react'
 import { formatMonthCn } from '../lib/format'
-import type { DerivedSession } from '../model/derive'
-import { useAppStore } from '../model/store'
+import { hasFilters } from '../model/filters'
+import { savedViewsOf, useAppStore } from '../model/store'
 
-/** 大纲：月份分组 → 日期节行；点击跳转，滚动时高亮当前节 */
-export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
-  const doc = useAppStore((s) => s.doc)
-  const filter = useAppStore((s) => s.filter)
-  const activeSession = useAppStore((s) => s.activeSession)
-  const jumping = useAppStore((s) => s.jumpTarget !== null)
-  const requestJump = useAppStore((s) => s.requestJump)
-  const listRef = useRef<HTMLDivElement>(null)
+export function Sidebar({
+  onNavigate,
+  collapsed = false,
+}: {
+  onNavigate?: () => void
+  collapsed?: boolean
+}) {
+  const state = useAppStore()
+  const [closed, setClosed] = useState<Set<string>>(new Set())
+  const dateListRef = useRef<HTMLDivElement>(null)
+  const initializedSourceRef = useRef<string | null>(null)
+  const doc = state.doc
 
-  // 当前节变化时让高亮行保持可见。手动只滚侧栏自己的容器——
-  // scrollIntoView 会波及所有可滚动祖先，也不认识吸顶月份头的遮挡。
-  // 跳转动画期间冻结：activeSession 会连续扫过途经的日期，跟着滚只会让
-  // 侧栏乱跳；等跳转结束（jumping 变回 false）再一次性校正到最终位置。
-  useEffect(() => {
-    if (jumping) return
-    const list = listRef.current
-    const row = list?.querySelector<HTMLElement>(`[data-nav-session="${activeSession}"]`)
-    if (!list || !row) return
-    const listRect = list.getBoundingClientRect()
-    const rowRect = row.getBoundingClientRect()
-    const stickyH = 34 // 吸顶月份头高度：行从上方进入时不被它盖住
-    const pad = 8 // 从下方进入时不贴死底边
-    if (rowRect.top < listRect.top + stickyH) list.scrollTop += rowRect.top - listRect.top - stickyH
-    else if (rowRect.bottom > listRect.bottom - pad)
-      list.scrollTop += rowRect.bottom - listRect.bottom + pad
-  }, [activeSession, jumping])
+  useLayoutEffect(() => {
+    const dateList = dateListRef.current
+    if (!doc || !dateList || collapsed) return
+    const initialSource = initializedSourceRef.current !== state.sourceKey
+    const alignDateList = () => {
+      initializedSourceRef.current = state.sourceKey
+      if (initialSource) {
+        dateList.scrollTop = dateList.scrollHeight
+        // 移动端目录重新打开时，正文已经停在某一天，直接让这一天可见。
+        if (!onNavigate) return
+      }
+      if (state.view !== 'chat' || state.jumpTarget) return
+      const active = dateList.querySelector<HTMLElement>(
+        `[data-nav-session="${state.activeSession}"]`,
+      )
+      if (!active) return
+      // 只调整日期列表自己的滚动位置，避免 scrollIntoView 连带滚动正文或移动端抽屉。
+      const viewport = dateList.getBoundingClientRect()
+      const item = active.getBoundingClientRect()
+      const padding = 8
+      if (item.top < viewport.top + padding) dateList.scrollTop += item.top - viewport.top - padding
+      else if (item.bottom > viewport.bottom - padding)
+        dateList.scrollTop += item.bottom - viewport.bottom + padding
+    }
+    // 原生 dialog 在父级 effect 中 showModal 后才有尺寸；下一帧再测量抽屉。
+    const frame = requestAnimationFrame(alignDateList)
+    return () => cancelAnimationFrame(frame)
+  }, [doc, state.sourceKey, state.activeSession, state.jumpTarget, state.view, collapsed])
 
   if (!doc) return null
-
-  const countOf = (s: DerivedSession) =>
-    filter === 'all' ? s.messages.length : filter === 'user' ? s.userCount : s.aiCount
-
-  const jumpTo = (s: DerivedSession) => {
-    const first = filter === 'all' ? s.messages[0] : s.messages.find((m) => m.role === filter)
-    if (first) {
-      requestJump(first.id, { smooth: true })
-      onNavigate?.()
-    }
+  const navigate = (callback: () => void) => {
+    callback()
+    onNavigate?.()
   }
-
+  const nav = [
+    {
+      label: '所有记录',
+      icon: BookOpen,
+      active: state.view === 'chat' && state.readMode === 'conversation' && !state.filters.starred,
+      action: () => {
+        state.setView('chat')
+        state.setReadMode('conversation')
+        if (state.filter !== 'all' || hasFilters(state.filters)) state.clearFilters()
+      },
+    },
+    {
+      label: '我的日记',
+      icon: Feather,
+      active: state.view === 'chat' && state.readMode === 'diary',
+      action: () => {
+        state.setView('chat')
+        state.setReadMode('diary')
+        if (state.filter !== 'all' || hasFilters(state.filters)) state.clearFilters()
+      },
+    },
+    {
+      label: '时光回顾',
+      icon: History,
+      active: state.view === 'review',
+      action: () => state.setView('review'),
+    },
+    {
+      label: '记录统计',
+      icon: BarChart3,
+      active: state.view === 'stats',
+      action: () => state.setView('stats'),
+    },
+  ]
   return (
-    <div ref={listRef} className="hc-scrollbar h-full overflow-y-auto overscroll-contain px-2 pb-3">
-      {doc.months.map((month) => {
-        const sessions = month.sessions.filter((s) => countOf(s) > 0)
-        if (sessions.length === 0) return null
-        return (
-          <div key={month.ym} className="mb-2">
-            {/* 吸顶月份头：不透明且横向铺满（-mx-2 抵消容器 gutter），否则滚过的行会从缝隙露出 */}
-            <div className="sticky top-0 z-10 -mx-2 bg-neutral-50 px-4 pt-3 pb-1 text-[11px] font-semibold tracking-wide text-neutral-400 dark:bg-neutral-900 dark:text-neutral-500">
-              {month.ym === '未标日期' ? month.ym : formatMonthCn(month.ym)}
-            </div>
-            {sessions.map((s) => (
-              <button
-                key={s.index}
-                type="button"
-                data-nav-session={s.index}
-                title={[s.date, s.weekday, s.title].filter(Boolean).join(' · ')}
-                onClick={() => jumpTo(s)}
-                className={clsx(
-                  'flex w-full items-baseline gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] transition-colors',
-                  s.index === activeSession
-                    ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300'
-                    : 'text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800',
-                )}
-              >
-                <span className="shrink-0 font-mono text-xs tabular-nums">
-                  {s.date ? s.date.slice(5) : '——'}
-                </span>
-                <span className="min-w-0 flex-1 truncate">
-                  {s.title ?? s.weekday ?? ''}
-                </span>
-                <span className="shrink-0 text-[11px] text-neutral-400 dark:text-neutral-500">
-                  {countOf(s)}
-                </span>
-              </button>
-            ))}
+    <div
+      className={clsx(
+        'dg-sidebar-content flex h-full flex-col pb-4 pt-3',
+        collapsed && 'is-collapsed',
+      )}
+    >
+      <nav aria-label="主要导航" className="space-y-1">
+        {nav.map(({ icon: Icon, ...item }) => (
+          <button
+            key={item.label}
+            className={clsx('dg-nav', item.active && 'is-active')}
+            title={collapsed ? item.label : undefined}
+            aria-label={item.label}
+            onClick={() => navigate(item.action)}
+          >
+            <Icon size={17} strokeWidth={1.6} />
+            <span className="dg-nav-label">{item.label}</span>
+          </button>
+        ))}
+      </nav>
+      <div className="dg-nav-detail my-5 px-2 text-[10px] font-medium tracking-widest text-neutral-400">
+        整理与查找
+      </div>
+      <div className="space-y-0.5">
+        <button
+          className="dg-nav"
+          title={collapsed ? '我的收藏' : undefined}
+          aria-label="我的收藏"
+          onClick={() =>
+            navigate(() => {
+              state.clearFilters()
+              state.setReadMode('conversation')
+              state.setFilters({ starred: true })
+            })
+          }
+        >
+          <Bookmark size={16} />
+          <span className="dg-nav-label">我的收藏</span>
+          <span className="dg-nav-label ml-auto text-[11px] text-neutral-400">
+            {doc.messages.filter((message) => message.starred).length || ''}
+          </span>
+        </button>
+        <button
+          className="dg-nav"
+          title={collapsed ? '标签管理' : undefined}
+          aria-label="标签管理"
+          onClick={() => navigate(() => state.setPanel('tags'))}
+        >
+          <Tags size={16} />
+          <span className="dg-nav-label">标签管理</span>
+        </button>
+        <button
+          className="dg-nav"
+          title={collapsed ? '查找与替换' : undefined}
+          aria-label="查找与替换"
+          onClick={() => navigate(() => state.setPanel('replace'))}
+        >
+          <TextSearch size={16} />
+          <span className="dg-nav-label">查找与替换</span>
+        </button>
+      </div>
+      {savedViewsOf(doc).length > 0 && (
+        <div className="dg-nav-detail mt-4" inert={collapsed}>
+          <p className="mb-2 px-2 text-[10px] tracking-widest text-neutral-400">常用筛选</p>
+          {savedViewsOf(doc).map((view) => (
+            <button
+              key={view.id}
+              className="dg-nav"
+              onClick={() => navigate(() => state.applyView(view))}
+            >
+              <SearchCheck size={15} />
+              <span className="truncate">{view.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="dg-nav-detail mb-2 mt-6 flex items-center justify-between px-2 text-[10px] font-medium tracking-widest text-neutral-400">
+        <span>按日期阅读</span>
+        <span className="tracking-normal">
+          {new Set(doc.sessions.map((session) => session.date)).size} 天
+        </span>
+      </div>
+      <div
+        ref={dateListRef}
+        aria-label="按日期阅读"
+        className="dg-nav-detail hc-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1"
+        inert={collapsed}
+      >
+        {doc.months.map((month) => (
+          <div key={`${month.ym}-${month.sessions[0]?.index}`} className="mb-3">
+            <button
+              className="flex w-full items-center justify-between px-2 py-2 text-xs font-medium text-neutral-500 dark:text-neutral-400"
+              onClick={() =>
+                setClosed((current) => {
+                  const next = new Set(current)
+                  const groupId = `${month.ym}-${month.sessions[0]?.index}`
+                  if (next.has(groupId)) next.delete(groupId)
+                  else next.add(groupId)
+                  return next
+                })
+              }
+              aria-expanded={!closed.has(`${month.ym}-${month.sessions[0]?.index}`)}
+            >
+              {formatMonthCn(month.ym)}
+              <ChevronDown
+                size={13}
+                className={
+                  closed.has(`${month.ym}-${month.sessions[0]?.index}`) ? '-rotate-90' : ''
+                }
+              />
+            </button>
+            {!closed.has(`${month.ym}-${month.sessions[0]?.index}`) &&
+              month.sessions.map((session) => (
+                <button
+                  key={session.index}
+                  data-nav-session={session.index}
+                  className={clsx(
+                    'dg-date-nav',
+                    state.activeSession === session.index && state.view === 'chat' && 'is-active',
+                  )}
+                  onClick={() =>
+                    navigate(() => {
+                      state.setView('chat')
+                      const first = session.messages[0]
+                      if (first) state.requestJump(first.id, { smooth: true })
+                      else state.setDateEditor(session.index)
+                    })
+                  }
+                >
+                  <span className="w-10 shrink-0 tabular-nums">
+                    {session.date?.slice(5) ?? '未标'}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">
+                    {session.title && !/^(周|星期)[一二三四五六日天]$/.test(session.title)
+                      ? session.title
+                      : session.weekday}
+                  </span>
+                  <span className="text-[10px] opacity-50">{session.messages.length}</span>
+                </button>
+              ))}
           </div>
-        )
-      })}
+        ))}
+      </div>
+      <div className="dg-rail-tools mt-auto space-y-1" hidden={!collapsed}>
+        <button
+          className="dg-nav"
+          aria-label="搜索记录"
+          title="搜索记录"
+          onClick={() => state.setSearchOpen(true)}
+        >
+          <Search size={17} />
+        </button>
+        <button
+          className="dg-nav"
+          aria-label="外观与阅读"
+          title="外观与阅读"
+          onClick={() => state.setSettingsOpen(true)}
+        >
+          <Settings2 size={17} />
+        </button>
+      </div>
     </div>
   )
 }

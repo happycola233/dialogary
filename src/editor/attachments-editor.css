@@ -1,0 +1,153 @@
+.dg-attachment-caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: color-mix(in srgb, currentColor 50%, transparent);
+}
+.dg-attachment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dg-attachment-card {
+  position: relative;
+  border-radius: 14px;
+  background: color-mix(in srgb, currentColor 3%, transparent);
+}
+.dg-attachment-card.is-dragging {
+  opacity: 0.25;
+}
+.dg-attachment-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 78px;
+  padding: 10px 14px 10px 8px;
+}
+.dg-attachment-handle {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 40px;
+  border-radius: 7px;
+  flex-shrink: 0;
+  color: color-mix(in srgb, currentColor 28%, transparent);
+  cursor: grab;
+  touch-action: none;
+}
+.dg-attachment-handle:hover {
+  color: var(--dg-accent);
+  background: var(--dg-accent-soft);
+}
+.dg-attachment-handle:active {
+  cursor: grabbing;
+}
+.dg-attachment-handle:focus-visible {
+  outline: 2px solid var(--dg-accent);
+}
+.dg-attachment-type {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 42px;
+  border-radius: 10px;
+  background: var(--dg-accent-soft);
+  color: var(--dg-accent);
+  flex-shrink: 0;
+}
+.dg-attachment-summary {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+  text-align: left;
+  border-radius: 6px;
+}
+.dg-attachment-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  font-weight: 500;
+}
+.dg-attachment-path {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  color: color-mix(in srgb, currentColor 43%, transparent);
+}
+.dg-attachment-position {
+  width: 85px;
+  flex-shrink: 0;
+}
+.dg-attachment-position button[role='combobox'] {
+  min-height: 32px;
+  padding: 6px 9px;
+  border-color: transparent;
+  background: transparent;
+  font-size: 11px;
+}
+.dg-attachment-icon-button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 32px;
+  flex-shrink: 0;
+  color: color-mix(in srgb, currentColor 42%, transparent);
+  border-radius: 7px;
+}
+.dg-attachment-icon-button:hover {
+  color: var(--dg-accent);
+  background: var(--dg-accent-soft);
+}
+.dg-attachment-icon-button:focus-visible,
+.dg-attachment-summary:focus-visible {
+  outline: 2px solid var(--dg-accent);
+}
+.dg-attachment-remove:hover {
+  color: #c46f7d;
+  background: color-mix(in srgb, #c46f7d 10%, transparent);
+}
+.dg-attachment-details {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 20px 20px 48px;
+}
+.dg-attachment-drag-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+  border-radius: 14px;
+  color: var(--dg-accent);
+  background: var(--dg-surface, Canvas);
+  box-shadow: 0 12px 40px #0002;
+  outline: 1px solid color-mix(in srgb, var(--dg-accent) 20%, transparent);
+}
+.dg-attachment-drag-preview span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+@media (max-width: 640px) {
+  .dg-attachment-row {
+    gap: 5px;
+    padding-right: 8px;
+  }
+  .dg-attachment-type {
+    display: none;
+  }
+  .dg-attachment-position {
+    width: 76px;
+  }
+  .dg-attachment-details {
+    padding: 0 14px 16px;
+  }
+}

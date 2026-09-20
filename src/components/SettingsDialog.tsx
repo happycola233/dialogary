@@ -1,127 +1,170 @@
-import { Check, RotateCcw, X } from 'lucide-react'
-import clsx from 'clsx'
+import { Check, Monitor, Moon, RotateCcw, Sun } from 'lucide-react'
 import { useState } from 'react'
+import type { CSSProperties } from 'react'
 import {
   ACCENT_OPTIONS,
+  PALETTE_OPTIONS,
   DEFAULT_APPEARANCE,
   FONT_RANGE,
   WIDTH_RANGE,
   applyAppearance,
   getAppearance,
-  type Appearance,
 } from '../lib/appearance'
+import type { AccentColor, Appearance } from '../lib/appearance'
+import { applyTheme, getStoredTheme } from '../lib/theme'
 import { useIsDark } from '../lib/useIsDark'
 import { useAppStore } from '../model/store'
+import { EditorDialog, mutedButtonClass, primaryButtonClass } from '../editor/EditorDialog'
+import { Select } from './ui/Select'
 
-/** 外观设置：气泡颜色 / 内容宽度 / 消息字号，改动即时生效并持久化 */
 export function SettingsDialog() {
-  const open = useAppStore((s) => s.settingsOpen)
-  const setOpen = useAppStore((s) => s.setSettingsOpen)
-  if (!open) return null
-  return <SettingsPanel onClose={() => setOpen(false)} />
+  const open = useAppStore((state) => state.settingsOpen)
+  const setOpen = useAppStore((state) => state.setSettingsOpen)
+  return open ? <SettingsPanel onClose={() => setOpen(false)} /> : null
 }
 
 function SettingsPanel({ onClose }: { onClose: () => void }) {
   const isDark = useIsDark()
   const [appearance, setAppearance] = useState<Appearance>(getAppearance)
-
+  const [mode, setMode] = useState(getStoredTheme)
   const update = (patch: Partial<Appearance>) => {
     const next = { ...appearance, ...patch }
     setAppearance(next)
     applyAppearance(next)
   }
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/30 p-3 pt-[12vh]"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-2xl dark:border-neutral-700 dark:bg-neutral-900"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-neutral-200/80 px-4 py-3 dark:border-neutral-800">
-          <h2 className="text-sm font-semibold">外观设置</h2>
+    <EditorDialog
+      title="外观与阅读"
+      onClose={onClose}
+      footer={
+        <>
           <button
             type="button"
-            onClick={onClose}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-          >
-            <X size={15} />
-          </button>
-        </div>
-        <div className="divide-y divide-neutral-100 px-5 dark:divide-neutral-800">
-          <section className="py-4">
-            <div className="flex items-baseline justify-between">
-              <span className="text-[13px] font-medium text-neutral-700 dark:text-neutral-200">
-                气泡颜色
-              </span>
-              <span className="text-xs text-neutral-400 dark:text-neutral-500">
-                {ACCENT_OPTIONS.find((o) => o.value === appearance.accent)?.label}
-              </span>
-            </div>
-            <div className="mt-3 flex items-center gap-2.5">
-              {ACCENT_OPTIONS.map((o) => {
-                const active = appearance.accent === o.value
-                return (
-                  <button
-                    key={o.value}
-                    type="button"
-                    title={o.label}
-                    aria-pressed={active}
-                    onClick={() => update({ accent: o.value })}
-                    className={clsx(
-                      'flex h-8 w-8 items-center justify-center rounded-full transition-[transform,box-shadow] hover:scale-110',
-                      active &&
-                        'ring-2 ring-neutral-400 ring-offset-2 ring-offset-white dark:ring-neutral-500 dark:ring-offset-neutral-900',
-                    )}
-                    style={{ backgroundColor: isDark ? o.dark : o.light }}
-                  >
-                    {active && <Check size={14} className="text-white drop-shadow" />}
-                  </button>
-                )
-              })}
-            </div>
-          </section>
-          <SliderRow
-            label="内容宽度"
-            value={appearance.contentWidth}
-            min={WIDTH_RANGE.min}
-            max={WIDTH_RANGE.max}
-            unit="px"
-            onChange={(contentWidth) => update({ contentWidth })}
-          />
-          <SliderRow
-            label="消息字号"
-            value={appearance.fontSize}
-            min={FONT_RANGE.min}
-            max={FONT_RANGE.max}
-            unit="px"
-            onChange={(fontSize) => update({ fontSize })}
-          />
-        </div>
-        <div className="flex items-center justify-between border-t border-neutral-200/80 px-5 py-3 dark:border-neutral-800">
-          <button
-            type="button"
+            className={`${mutedButtonClass} mr-auto`}
             onClick={() => {
               setAppearance(DEFAULT_APPEARANCE)
               applyAppearance(DEFAULT_APPEARANCE)
+              setMode('system')
+              applyTheme('system')
             }}
-            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
           >
-            <RotateCcw size={13} />
+            <RotateCcw size={14} />
             恢复默认
           </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg bg-indigo-500 px-3.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-600 dark:bg-indigo-500/80 dark:hover:bg-indigo-500"
-          >
+          <button type="button" className={primaryButtonClass} onClick={onClose}>
             完成
           </button>
+        </>
+      }
+    >
+      <div className="dg-reading-settings">
+        <div className="dg-setting-row">
+          <span className="dg-setting-label">显示模式</span>
+          <div className="dg-mode-switch" aria-label="显示模式">
+            {(
+              [
+                { value: 'light', label: '浅色', icon: Sun },
+                { value: 'dark', label: '深色', icon: Moon },
+                { value: 'system', label: '跟随系统', icon: Monitor },
+              ] as const
+            ).map(({ value, label, icon: Icon }) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={mode === value}
+                onClick={() => {
+                  setMode(value)
+                  applyTheme(value)
+                }}
+              >
+                <Icon size={14} />
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
         </div>
+        <section>
+          <h3 className="dg-setting-label">界面配色</h3>
+          <div className="dg-palette-options">
+            {PALETTE_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                aria-label={option.label}
+                aria-pressed={appearance.palette === option.value}
+                onClick={() => update({ palette: option.value })}
+              >
+                <span className="dg-palette-swatch" style={{ background: option.color }}>
+                  {appearance.palette === option.value && <Check size={12} />}
+                </span>
+                <span>{option.label}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+        <div className="dg-setting-row">
+          <span className="dg-setting-label">我的消息颜色</span>
+          <Select
+            aria-label="我的消息颜色"
+            className="w-36"
+            size="sm"
+            value={appearance.accent}
+            onChange={(event) => update({ accent: event.target.value as AccentColor })}
+            options={ACCENT_OPTIONS.map((option) => ({
+              value: option.value,
+              label: option.label,
+              swatch: isDark ? option.dark : option.light,
+            }))}
+          />
+        </div>
+        <div className="dg-setting-reading">
+          <SliderRow
+            label="阅读宽度"
+            value={appearance.contentWidth}
+            min={WIDTH_RANGE.min}
+            max={WIDTH_RANGE.max}
+            onChange={(contentWidth) => update({ contentWidth })}
+          />
+          <div className="dg-width-presets" aria-label="阅读宽度预设">
+            {[
+              { label: '紧凑', value: 720 },
+              { label: '舒展', value: 960 },
+              { label: '宽屏', value: 1200 },
+            ].map(({ label, value }) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={appearance.contentWidth === value}
+                onClick={() => update({ contentWidth: value })}
+              >
+                {label}
+                <span>{value}</span>
+              </button>
+            ))}
+          </div>
+          <SliderRow
+            label="文字大小"
+            value={appearance.fontSize}
+            min={FONT_RANGE.min}
+            max={FONT_RANGE.max}
+            onChange={(fontSize) => update({ fontSize })}
+          />
+        </div>
+        <section
+          className="dg-reading-preview"
+          aria-label="阅读预览"
+          style={{ fontSize: appearance.fontSize }}
+        >
+          <p className="dg-preview-caption">阅读预览</p>
+          <p className="hc-user-bubble">
+            今天有一阵很舒服的风，
+            <br />
+            想把这一刻记下来。
+          </p>
+          <p className="dg-preview-reply">那就留在这里，慢慢写。</p>
+        </section>
       </div>
-    </div>
+    </EditorDialog>
   )
 }
 
@@ -130,45 +173,38 @@ function SliderRow({
   value,
   min,
   max,
-  unit,
   onChange,
 }: {
   label: string
   value: number
   min: number
   max: number
-  unit: string
-  onChange: (v: number) => void
+  onChange: (value: number) => void
 }) {
   return (
-    <section className="py-4">
-      <div className="flex items-center justify-between">
-        <span className="text-[13px] font-medium text-neutral-700 dark:text-neutral-200">{label}</span>
-        <span className="rounded-md bg-neutral-100 px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
+    <label className="dg-reading-slider">
+      <span className="dg-setting-row">
+        <span className="dg-setting-label">{label}</span>
+        <output>
           {value}
-          {unit}
-        </span>
-      </div>
+          <span> px</span>
+        </output>
+      </span>
       <input
         type="range"
+        aria-label={label}
         min={min}
         max={max}
         step={1}
         value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="dg-slider mt-3 w-full"
-        aria-label={label}
+        style={
+          {
+            '--dg-slider-progress': `${((value - min) / (max - min)) * 100}%`,
+          } as CSSProperties
+        }
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="dg-slider"
       />
-      <div className="mt-1 flex justify-between font-mono text-[10px] tabular-nums text-neutral-300 dark:text-neutral-600">
-        <span>
-          {min}
-          {unit}
-        </span>
-        <span>
-          {max}
-          {unit}
-        </span>
-      </div>
-    </section>
+    </label>
   )
 }

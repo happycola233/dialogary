@@ -25,41 +25,32 @@ export const LazyMessage = memo(function LazyMessage({ msg }: { msg: DerivedMess
   const forced = useAppStore((state) => state.forcedIds.has(msg.id))
   const flashing = useAppStore((state) => state.flashId === msg.id)
   const clearFlash = useAppStore((state) => state.clearFlash)
-  const [revealedMessage, setRevealedMessage] = useState<DerivedMessage | null>(null)
-  const [measurement, setMeasurement] = useState<{ message: DerivedMessage; height: number } | null>(null)
+  // React key 已固定消息身份；文档重新派生后，收藏等小修改不能让已读消息退回占位符。
+  const [revealed, setRevealed] = useState(false)
+  const [measuredHeight, setMeasuredHeight] = useState<number | null>(null)
   const shellRef = useRef<HTMLDivElement>(null)
   const pendingMountGeometryRef = useRef<PendingMountGeometry | null>(null)
-  const currentMessageRef = useRef(msg)
-
-  const visible = revealedMessage === msg
-  const mounted = visible || forced
-  const measuredHeight = measurement?.message === msg ? measurement.height : null
+  const mounted = revealed || forced
   const estimatedHeight = useMemo(() => estimateMessagePlaceholderHeight(msg), [msg])
-
-  useLayoutEffect(() => {
-    pendingMountGeometryRef.current = null
-    currentMessageRef.current = msg
-  }, [msg])
 
   useEffect(() => {
     if (mounted || !shellRef.current) return
     const shell = shellRef.current
     const scrollRoot = shell.closest('main')
     if (!(scrollRoot instanceof HTMLElement) || typeof IntersectionObserver === 'undefined') {
-      setRevealedMessage(msg)
+      setRevealed(true)
       return
     }
     return observeLazyMessageVisibility(scrollRoot, shell, () => {
-      if (currentMessageRef.current !== msg) return
       const shellRect = shell.getBoundingClientRect()
       pendingMountGeometryRef.current = {
         root: scrollRoot,
         height: shellRect.height,
         wasAboveViewport: shellRect.bottom <= scrollRoot.getBoundingClientRect().top + 0.5,
       }
-      setRevealedMessage(msg)
+      setRevealed(true)
     })
-  }, [mounted, msg])
+  }, [mounted])
 
   useLayoutEffect(() => {
     const shell = shellRef.current
@@ -77,7 +68,9 @@ export const LazyMessage = memo(function LazyMessage({ msg }: { msg: DerivedMess
     ) {
       pendingGeometry.root.scrollTop += height - pendingGeometry.height
     }
-    setMeasurement({ message: msg, height })
+    setMeasuredHeight(height)
+    // 导航强制挂载的消息也永久保留，forcedIds 清理时不再次卸载 Markdown。
+    setRevealed(true)
 
     const scrollRoot = shell.closest('main')
     if (
@@ -88,7 +81,7 @@ export const LazyMessage = memo(function LazyMessage({ msg }: { msg: DerivedMess
       return
     }
     return observeLegacyMessageSize(shell, scrollRoot, height)
-  }, [mounted, msg])
+  }, [mounted])
 
   useEffect(() => {
     if (!flashing) return

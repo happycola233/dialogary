@@ -1,0 +1,47 @@
+/* 使用独立作用域覆盖全局代码主题，消息中的 Markdown 配色保持原样。 */
+.dg-json-preview {
+  overflow: auto;
+  overscroll-behavior: contain;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border-radius: 12px;
+  padding: 16px;
+  background: #f6f8fb;
+  color: #8190a3;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.8;
+  tab-size: 2;
+  outline: none;
+}
+.dg-json-preview:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--dg-accent);
+}
+.dg-json-preview .hljs-attr {
+  color: #39729c;
+}
+.dg-json-preview .hljs-string {
+  color: #55774d;
+}
+.dg-json-preview .hljs-number {
+  color: #aa673f;
+}
+.dg-json-preview .hljs-literal {
+  color: #8b60ae;
+}
+.dark .dg-json-preview {
+  background: #1e2229;
+  color: #8291a5;
+}
+.dark .dg-json-preview .hljs-attr {
+  color: #93bde7;
+}
+.dark .dg-json-preview .hljs-string {
+  color: #b2cda1;
+}
+.dark .dg-json-preview .hljs-number {
+  color: #e6b58f;
+}
+.dark .dg-json-preview .hljs-literal {
+  color: #c3a4df;
+}

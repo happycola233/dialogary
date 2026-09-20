@@ -45,7 +45,10 @@ export default defineConfig({
   base: './',
   plugins: [react(), tailwindcss(), chatDataManifest()],
   server: {
-    host: true, // 允许手机通过局域网 IP 访问 dev 服务器
+    host: '0.0.0.0', // 允许手机通过局域网 IP 访问 dev 服务器
     port: 5173,
+  },
+  preview: {
+    host: '0.0.0.0',
   },
 })

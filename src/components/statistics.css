@@ -1,0 +1,38 @@
+/* 统计语义配色与消息气泡相互独立，蓝色表示自己/输入，紫色表示 AI/输出。 */
+:root {
+  --dg-chart-primary: #86afe4;
+  --dg-chart-secondary: #c0afe4;
+  --dg-chart-grid: #e9edf3;
+  --dg-chart-label: #9199a7;
+  --dg-chart-text: #344155;
+  --dg-chart-hover: #a8c4ec18;
+  --dg-chart-tooltip: #fff;
+  --dg-heat-0: #f0f3f7;
+  --dg-heat-1: #e1edfc;
+  --dg-heat-2: #bed6f5;
+  --dg-heat-3: #95baea;
+  --dg-heat-4: #6f9dd7;
+}
+html.dark {
+  --dg-chart-primary: #82ade3;
+  --dg-chart-secondary: #b7a4de;
+  --dg-chart-grid: #ffffff0e;
+  --dg-chart-label: #8691a1;
+  --dg-chart-text: #e0e6ef;
+  --dg-chart-hover: #a8c4ec0c;
+  --dg-chart-tooltip: #252a33;
+  --dg-heat-0: #22272f;
+  --dg-heat-1: #2c3e57;
+  --dg-heat-2: #42618a;
+  --dg-heat-3: #6489ba;
+  --dg-heat-4: #93b6e5;
+}
+@layer components {
+  .dg-hour-bar {
+    background: var(--dg-chart-primary);
+  }
+  .group:hover .dg-hour-bar,
+  .group:focus-visible .dg-hour-bar {
+    background: var(--dg-chart-secondary);
+  }
+}

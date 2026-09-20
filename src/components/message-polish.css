@@ -1,0 +1,139 @@
+@layer components {
+  .dg-reaction-picker {
+    width: 19rem;
+    max-width: calc(100vw - 1.5rem);
+    padding: 0.8rem;
+  }
+  .dg-reaction-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--dg-muted, #737b85);
+    font-size: 0.75rem;
+  }
+  .dg-reaction-picker .dg-reaction-manage {
+    display: inline-flex;
+    width: auto;
+    padding: 0.3rem 0.5rem;
+    color: var(--dg-accent, #608ebd);
+    font-size: 0.7rem;
+  }
+  .dg-reaction-scroll {
+    max-height: 17rem;
+    overflow-y: auto;
+    padding-top: 0.5rem;
+  }
+  .dg-reaction-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 0.25rem;
+  }
+  .dg-reaction-option {
+    position: relative;
+    min-width: 0;
+  }
+  .dg-reaction-picker .dg-emoji-choice {
+    display: flex;
+    width: 100%;
+    height: 2.6rem;
+    padding: 0.3rem;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.3rem;
+    border-radius: 0.65rem;
+  }
+  .dg-emoji-choice[aria-pressed='true'] {
+    background: var(--dg-accent-soft, #edf4fc);
+  }
+  .dg-emoji-selected {
+    position: absolute;
+    bottom: 2px;
+    right: 3px;
+    color: var(--dg-accent, #608ebd);
+  }
+  .dg-reaction-picker .dg-emoji-favorite {
+    position: absolute;
+    top: -1px;
+    right: -1px;
+    display: flex;
+    width: 1rem;
+    height: 1rem;
+    justify-content: center;
+    align-items: center;
+    padding: 0;
+    background: var(--dg-paper, #fff);
+    border-radius: 50%;
+    color: var(--dg-accent, #608ebd);
+    box-shadow: 0 1px 4px #0001;
+  }
+  .dg-reaction-subheading {
+    margin-top: 0.85rem;
+    margin-bottom: 0.5rem;
+  }
+  .dg-reaction-empty {
+    margin: 0.4rem 0.2rem 0.7rem;
+    font-size: 0.75rem;
+    line-height: 1.6;
+    color: #9197a0;
+  }
+  .dg-reaction-add {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: 0.65rem;
+    background: var(--dg-accent-soft, #edf4fc);
+    padding: 0.3rem;
+    margin-top: 0.65rem;
+  }
+  .dg-reaction-add input {
+    min-width: 0;
+    flex: 1;
+    padding: 0.35rem 0.45rem;
+    background: transparent;
+    outline: none;
+    font-size: 0.8rem;
+  }
+  .dg-reaction-picker .dg-reaction-add button {
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    color: var(--dg-accent, #608ebd);
+  }
+  .dg-reaction-add button:disabled {
+    opacity: 0.3;
+  }
+  .dg-attachment-gallery {
+    position: relative;
+    max-width: 100%;
+    flex-shrink: 0;
+  }
+  .dg-image-tile {
+    position: absolute;
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    border-radius: 10px;
+    background: transparent;
+    transition: filter 150ms;
+  }
+  .dg-image-tile:hover {
+    filter: brightness(1.07);
+  }
+  .dg-image-tile:focus-visible {
+    outline: 2px solid var(--dg-accent);
+    outline-offset: 3px;
+  }
+  .dg-image-tile img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    object-fit: contain;
+  }
+  .dg-image-tile.is-unavailable {
+    overflow: auto;
+  }
+}

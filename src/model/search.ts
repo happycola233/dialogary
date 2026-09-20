@@ -1,5 +1,6 @@
 import type { DerivedDoc, DerivedMessage } from './derive'
 import type { Role } from '../parser/types'
+import { searchableText } from './filters'
 
 export interface SearchHit {
   id: string
@@ -14,7 +15,7 @@ export interface SearchHit {
 }
 
 function searchable(m: DerivedMessage): { content: string; thinking: string } {
-  return { content: m.content, thinking: m.thinking?.text ?? '' }
+  return { content: m.content, thinking: searchableText(m) }
 }
 
 /**

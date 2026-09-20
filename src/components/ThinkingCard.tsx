@@ -6,6 +6,7 @@ import { splitReasoningSections } from '../markdown/reasoningSections'
 import { useAppStore } from '../model/store'
 import type { Thinking } from '../parser/types'
 import { BrainIcon } from './BrainIcon'
+import { reasoningLabel } from '../process/reasoningTiming'
 
 /**
  * AI 思考摘要，样式对齐 happychat ReasoningCard：
@@ -18,7 +19,7 @@ export function ThinkingCard({ thinking }: { thinking: Thinking }) {
   const open = override ?? expandAll
   const sections = useMemo(() => splitReasoningSections(thinking.text), [thinking.text])
   const hasSummary = sections.length > 0
-  const label = thinking.label || '思考过程'
+  const label = reasoningLabel([], thinking)
 
   const statusContent = (
     <>
@@ -84,7 +85,11 @@ export function ThinkingCard({ thinking }: { thinking: Thinking }) {
                       />
                       <div className={clsx('min-w-0', sec.title && 'mt-1')}>
                         {sec.body && (
-                          <Markdown text={sec.body} variant="reasoning" className="hc-reasoning-detail" />
+                          <Markdown
+                            text={sec.body}
+                            variant="reasoning"
+                            className="hc-reasoning-detail"
+                          />
                         )}
                       </div>
                     </>

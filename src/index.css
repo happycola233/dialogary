@@ -1,4 +1,12 @@
 @import 'tailwindcss';
+@import './workspace.css';
+@import './components/change-review.css';
+@import './components/reading-settings.css';
+@import './components/statistics.css';
+@import './components/json-preview.css';
+@import './components/message-polish.css';
+@import './components/selection-annotation.css';
+@import './components/navigation.css';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -11,6 +19,7 @@
 
 html {
   font-family: var(--font-sans);
+  color-scheme: light;
 }
 
 html.dark {
@@ -604,7 +613,7 @@ html.dark {
 
 /* ===== 外观设置：正文内容宽度（数值由 appearance.ts 以内联变量覆盖）===== */
 :root {
-  --dg-content-width: 768px;
+  --dg-content-width: 960px;
 }
 
 /* ===== 设置面板滑杆 ===== */
@@ -656,59 +665,125 @@ html.dark {
 .hc-user-message-text {
   color: var(--hc-user-bubble-text);
 }
-:root {
+:root,
+html.hc-accent-default {
+  --hc-accent-swatch: #b4b4b4;
   --hc-user-bubble-bg: #f3f3f3;
+  --hc-user-bubble-bg-transparent: rgb(243 243 243 / 0);
   --hc-user-bubble-text: #0d0d0d;
+  --hc-message-edit-bg: #ececec;
+  --hc-message-edit-text: #000000;
+  --hc-accent-strong: #000000;
+  --hc-accent-strong-fg: #ffffff;
+}
+/* 默认（灰）重点色的光晕与“后台回复完成”未读点沿用蓝色重点色的色调；
+   其余重点色不定义该变量，统一回退到自身 swatch。 */
+html.hc-accent-default {
+  --hc-accent-glow-tint: #3a83f7;
 }
 html.hc-accent-blue {
+  --hc-accent-swatch: #3a83f7;
   --hc-user-bubble-bg: #e8f3fe;
+  --hc-user-bubble-bg-transparent: rgb(232 243 254 / 0);
   --hc-user-bubble-text: #0c274a;
+  --hc-accent-strong: #3a83f7;
 }
 html.hc-accent-green {
+  --hc-accent-swatch: #53b559;
   --hc-user-bubble-bg: #def3e5;
+  --hc-user-bubble-bg-transparent: rgb(222 243 229 / 0);
   --hc-user-bubble-text: #14361a;
+  --hc-accent-strong: #53b559;
 }
 html.hc-accent-yellow {
+  --hc-accent-swatch: #f6c543;
   --hc-user-bubble-bg: #fdf6dc;
+  --hc-user-bubble-bg-transparent: rgb(253 246 220 / 0);
   --hc-user-bubble-text: #51300c;
+  --hc-accent-strong: #f6c543;
 }
 html.hc-accent-pink {
+  --hc-accent-swatch: #e0766d;
   --hc-user-bubble-bg: #fcf1ef;
+  --hc-user-bubble-bg-transparent: rgb(252 241 239 / 0);
   --hc-user-bubble-text: #462320;
+  --hc-accent-strong: #e0766d;
 }
 html.hc-accent-orange {
+  --hc-accent-swatch: #ee7c37;
   --hc-user-bubble-bg: #fbe8db;
+  --hc-user-bubble-bg-transparent: rgb(251 232 219 / 0);
   --hc-user-bubble-text: #45240d;
+  --hc-accent-strong: #ee7c37;
 }
 html.hc-accent-purple {
+  --hc-accent-swatch: #8952ee;
   --hc-user-bubble-bg: #ede5fc;
+  --hc-user-bubble-bg-transparent: rgb(237 229 252 / 0);
   --hc-user-bubble-text: #291947;
+  --hc-accent-strong: #8952ee;
 }
-html.dark {
+.dark,
+html.dark.hc-accent-default {
+  --hc-accent-swatch: #9b9b9b;
   --hc-user-bubble-bg: #2b2b2b;
+  --hc-user-bubble-bg-transparent: rgb(43 43 43 / 0);
   --hc-user-bubble-text: #ffffff;
+  --hc-message-edit-bg: #2f2f2f;
+  --hc-message-edit-text: #ffffff;
+  --hc-accent-strong: #ffffff;
+  /* 默认重点色在深色模式使用白色实心按钮，需要黑色前景（发送箭头 / 按钮文字）保持对比。 */
+  --hc-accent-strong-fg: #000000;
+}
+html.dark.hc-accent-default {
+  /* 深色同理：光晕借用深色蓝重点色的色值。 */
+  --hc-accent-glow-tint: #2c67c5;
 }
 html.dark.hc-accent-blue {
+  --hc-accent-swatch: #2c67c5;
   --hc-user-bubble-bg: #173e76;
+  --hc-user-bubble-bg-transparent: rgb(23 62 118 / 0);
   --hc-user-bubble-text: #f6fafe;
+  --hc-accent-strong: #2c67c5;
+  --hc-accent-strong-fg: #ffffff;
 }
 html.dark.hc-accent-green {
+  --hc-accent-swatch: #48a04c;
   --hc-user-bubble-bg: #2c6732;
+  --hc-user-bubble-bg-transparent: rgb(44 103 50 / 0);
   --hc-user-bubble-text: #effaf3;
+  --hc-accent-strong: #48a04c;
+  --hc-accent-strong-fg: #ffffff;
 }
 html.dark.hc-accent-yellow {
+  --hc-accent-swatch: #d9a337;
   --hc-user-bubble-bg: #95611f;
+  --hc-user-bubble-bg-transparent: rgb(149 97 31 / 0);
   --hc-user-bubble-text: #fefbee;
+  --hc-accent-strong: #d9a337;
+  --hc-accent-strong-fg: #ffffff;
 }
 html.dark.hc-accent-pink {
+  --hc-accent-swatch: #c96257;
   --hc-user-bubble-bg: #8b3f36;
+  --hc-user-bubble-bg-transparent: rgb(139 63 54 / 0);
   --hc-user-bubble-text: #fef7f6;
+  --hc-accent-strong: #c96257;
+  --hc-accent-strong-fg: #ffffff;
 }
 html.dark.hc-accent-orange {
+  --hc-accent-swatch: #d25e28;
   --hc-user-bubble-bg: #87401d;
+  --hc-user-bubble-bg-transparent: rgb(135 64 29 / 0);
   --hc-user-bubble-text: #fdf5f1;
+  --hc-accent-strong: #d25e28;
+  --hc-accent-strong-fg: #ffffff;
 }
 html.dark.hc-accent-purple {
+  --hc-accent-swatch: #7849d1;
   --hc-user-bubble-bg: #4e2f88;
+  --hc-user-bubble-bg-transparent: rgb(78 47 136 / 0);
   --hc-user-bubble-text: #f8f5fd;
+  --hc-accent-strong: #7849d1;
+  --hc-accent-strong-fg: #ffffff;
 }

@@ -1,0 +1,63 @@
+@layer components {
+  .dg-selection-toolbar {
+    position: fixed;
+    inset: auto;
+    margin: 0;
+    padding: 4px;
+    overflow: visible;
+    border: 1px solid color-mix(in srgb, var(--dg-accent) 12%, transparent);
+    border-radius: 12px;
+    background: var(--dg-paper, #fff);
+    color: var(--dg-accent);
+    box-shadow:
+      0 5px 24px #20364b1c,
+      0 1px 4px #20364b0a;
+    animation: dg-excerpt-appear 130ms ease-out;
+  }
+  .dg-selection-toolbar button {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 34px;
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 120ms ease;
+  }
+  .dg-selection-toolbar button:hover,
+  .dg-selection-toolbar button:focus-visible {
+    background: var(--dg-accent-soft);
+  }
+  .dg-selection-toolbar button:focus-visible {
+    outline: 2px solid var(--dg-accent);
+    outline-offset: 1px;
+  }
+  .dark .dg-selection-toolbar {
+    box-shadow:
+      0 5px 24px #0005,
+      0 1px 4px #0003;
+  }
+  @keyframes dg-excerpt-appear {
+    from {
+      opacity: 0;
+      transform: translateY(3px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @media (pointer: coarse) {
+    .dg-selection-toolbar button {
+      min-height: 38px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .dg-selection-toolbar {
+      animation: none;
+    }
+  }
+}

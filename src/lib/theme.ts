@@ -13,8 +13,10 @@ function resolveDark(theme: ThemePreference): boolean {
 }
 
 function applyDomTheme(theme: ThemePreference): void {
-  // color-scheme 由 index.css 的 html.dark 规则随 .dark 类切换。
-  document.documentElement.classList.toggle('dark', resolveDark(theme))
+  const dark = resolveDark(theme)
+  document.documentElement.classList.toggle('dark', dark)
+  // 系统深色与网页浅色可以不同；原生输入框和滚动条必须跟随网页选择。
+  document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
 }
 
 /** 读取持久化的主题偏好；缺失或非法值一律视为 'system'。 */

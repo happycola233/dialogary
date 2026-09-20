@@ -32,9 +32,9 @@ export function timeOfDay(time: string): string | null {
 export function parseThinkingSeconds(label: string): number | null {
   let total = 0
   let found = false
-  const h = /(\d+)\s*h/.exec(label)
-  const m = /(\d+)\s*m(?!s)/.exec(label)
-  const s = /(\d+)\s*s/.exec(label)
+  const h = /(\d+(?:\.\d+)?)\s*(?:h(?![a-z])|小时)/i.exec(label)
+  const m = /(\d+(?:\.\d+)?)\s*(?:m(?![a-z])|分钟|分(?!钟))/i.exec(label)
+  const s = /(\d+(?:\.\d+)?)\s*(?:s(?![a-z])|秒)/i.exec(label)
   if (h) (total += Number(h[1]) * 3600), (found = true)
   if (m) (total += Number(m[1]) * 60), (found = true)
   if (s) (total += Number(s[1])), (found = true)

@@ -1,7 +1,6 @@
 import fs from 'node:fs'
-import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { parseChatlog } from './chatlog'
+import { parseChatlog, serializeChatlog, migrateV1ToV2 } from './chatlog'
 import { lintChatDoc } from './lint'
 
 const FM = `---\nformat: chatlog-md/1\ntitle: 测试\ntimezone: Asia/Shanghai\n---\n`
@@ -215,19 +214,10 @@ describe('lint', () => {
   })
 })
 
-describe('golden：真实聊天记录', () => {
-  const candidates = [
-    process.env['CHATLOG_FILE'],
-    ...(fs.existsSync('public/data')
-      ? fs
-          .readdirSync('public/data')
-          .filter((f) => f.endsWith('.chat.md'))
-          .map((f) => path.join('public/data', f))
-      : []),
-  ].filter((p): p is string => !!p && fs.existsSync(p))
-
-  it.skipIf(candidates.length === 0)('统计数字与 Python 参考解析器一致', () => {
-    const doc = parseChatlog(fs.readFileSync(candidates[0]!, 'utf8'))
+describe('golden：公开虚构 v1 示例', () => {
+  it('固定样例的兼容统计，不依赖用户持续增长的私人文档', () => {
+    const text = fs.readFileSync('examples/示例日记.v1.chat.md', 'utf8')
+    const doc = parseChatlog(text)
     const msgs = doc.sessions.flatMap((s) => s.messages)
     const by = <K>(keys: K[]) => {
       const m = new Map<K, number>()
@@ -235,14 +225,23 @@ describe('golden：真实聊天记录', () => {
       return Object.fromEntries([...m].map(([k, v]) => [String(k), v]))
     }
     expect(doc.format).toBe('chatlog-md/1')
-    expect(doc.sessions).toHaveLength(72)
-    expect(msgs).toHaveLength(333)
-    expect(by(msgs.map((m) => m.role))).toEqual({ user: 162, ai: 171 })
-    expect(by(msgs.map((m) => m.timePrecision))).toEqual({ day: 2, null: 50, second: 275, minute: 6 })
-    expect(msgs.filter((m) => m.model).length).toBe(43)
-    expect(msgs.filter((m) => m.thinking).length).toBe(42)
-    expect(msgs.reduce((n, m) => n + m.attachments.length, 0)).toBe(19)
-    // 真实文件应当没有结构性 error
+    expect(doc.sessions).toHaveLength(2)
+    expect(msgs).toHaveLength(5)
+    expect(by(msgs.map((m) => m.role))).toEqual({ user: 3, ai: 2 })
+    expect(by(msgs.map((m) => m.timePrecision))).toEqual({ second: 4, null: 1 })
+    expect(msgs.filter((m) => m.model).length).toBe(2)
+    expect(msgs.filter((m) => m.thinking).length).toBe(2)
+    expect(msgs.reduce((n, m) => n + m.attachments.length, 0)).toBe(1)
     expect(doc.issues.filter((i) => i.level === 'error')).toEqual([])
+    expect(serializeChatlog(doc)).toBe(text)
+    expect(migrateV1ToV2(text).report.ok).toBe(true)
+  })
+
+  const privateFile = process.env['CHATLOG_FILE']
+  it.skipIf(!privateFile)('显式指定的本地文件往返无损', () => {
+    const text = fs.readFileSync(privateFile!, 'utf8')
+    const doc = parseChatlog(text)
+    expect(serializeChatlog(doc)).toBe(text)
+    if (doc.format === 'chatlog-md/1') expect(migrateV1ToV2(text).report.ok).toBe(true)
   })
 })

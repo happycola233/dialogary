@@ -1,0 +1,221 @@
+.dg-markdown-editor {
+  --dg-editor-muted: #8c94a0;
+  --dg-editor-code: #8b5a97;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, currentColor 9%, transparent);
+  border-radius: 16px;
+  background: #fff;
+}
+.dark .dg-markdown-editor {
+  --dg-editor-muted: #818997;
+  --dg-editor-code: #c5a4cf;
+  background: #191919;
+}
+.dg-editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 9px 12px;
+  background: color-mix(in srgb, currentColor 2.5%, transparent);
+}
+.dg-editor-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+.dg-editor-tools[hidden],
+.dg-editor-writing[hidden] {
+  display: none;
+}
+.dg-editor-tools button {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  color: color-mix(in srgb, currentColor 62%, transparent);
+  transition:
+    background 150ms,
+    color 150ms;
+}
+.dg-editor-tools button:hover:not(:disabled) {
+  background: var(--dg-accent-soft);
+  color: var(--dg-accent);
+}
+.dg-editor-tools button:disabled {
+  opacity: 0.3;
+}
+.dg-editor-tools button:focus-visible,
+.dg-editor-view-switch button:focus-visible {
+  outline: 2px solid var(--dg-accent);
+  outline-offset: 2px;
+}
+.dg-editor-tool-divider {
+  height: 15px;
+  width: 1px;
+  margin: 0 5px;
+  background: color-mix(in srgb, currentColor 11%, transparent);
+}
+.dg-editor-view-switch {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  margin-left: auto;
+  border-radius: 9px;
+  background: color-mix(in srgb, currentColor 4%, transparent);
+}
+.dg-editor-view-switch button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border-radius: 7px;
+  font-size: 12px;
+  color: var(--dg-editor-muted);
+}
+.dg-editor-view-switch button[aria-pressed='true'] {
+  background: var(--dg-accent-soft);
+  color: var(--dg-accent);
+}
+.dg-editor-preview-label {
+  color: var(--dg-editor-muted);
+  font-size: 12px;
+  padding-left: 5px;
+}
+.dg-editor-canvas {
+  height: clamp(320px, 43dvh, 500px);
+  min-width: 0;
+}
+.dg-editor-split .dg-editor-canvas {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.dg-editor-writing {
+  height: 100%;
+  min-width: 0;
+}
+.dg-markdown-editor .cm-editor {
+  height: 100%;
+  font-size: 15px;
+}
+.dg-markdown-editor .cm-editor.cm-focused {
+  outline: none;
+}
+.dg-markdown-editor .cm-scroller {
+  font-family: inherit;
+  line-height: 1.95;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, currentColor 18%, transparent) transparent;
+  overscroll-behavior: contain;
+}
+.dg-markdown-editor .cm-content {
+  padding: 20px 0;
+  caret-color: var(--dg-accent);
+}
+.dg-markdown-editor .cm-line {
+  padding: 0 24px;
+}
+.dg-markdown-editor .cm-cursor {
+  border-left-color: var(--dg-accent);
+}
+.dg-markdown-editor .cm-selectionBackground,
+.dg-markdown-editor .cm-focused .cm-selectionBackground,
+.dg-markdown-editor ::selection {
+  background: color-mix(in srgb, var(--dg-accent) 21%, transparent);
+}
+.dg-markdown-editor .cm-placeholder {
+  color: var(--dg-editor-muted);
+}
+.dg-editor-reading {
+  height: 100%;
+  overflow: auto;
+  padding: 20px 24px;
+  overscroll-behavior: contain;
+  font-size: 15px;
+}
+.dg-editor-split .dg-editor-reading {
+  border-left: 1px solid color-mix(in srgb, currentColor 8%, transparent);
+}
+.dg-editor-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  color: var(--dg-editor-muted);
+  font-size: 11px;
+  background: color-mix(in srgb, currentColor 2%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+.dg-markdown-editor .cm-panels {
+  background: color-mix(in srgb, var(--dg-accent) 5%, Canvas);
+  color: inherit;
+  border: 0;
+  font-size: 12px;
+}
+.dg-markdown-editor .cm-search {
+  padding: 10px 35px 10px 12px;
+}
+.dg-markdown-editor .cm-textfield {
+  border: 0;
+  border-radius: 6px;
+  padding: 5px 8px;
+  color: inherit;
+  background: color-mix(in srgb, currentColor 5%, transparent);
+  outline-color: var(--dg-accent);
+}
+.dg-markdown-editor .cm-button {
+  color: inherit;
+  background: var(--dg-accent-soft);
+  border: 0;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+.dg-markdown-editor .cm-searchMatch {
+  background: color-mix(in srgb, #edc66c 28%, transparent);
+}
+.dg-markdown-editor .cm-searchMatch-selected {
+  background: color-mix(in srgb, var(--dg-accent) 28%, transparent);
+}
+@media (max-width: 640px) {
+  .dg-editor-toolbar {
+    padding: 8px;
+  }
+  .dg-editor-tools {
+    gap: 0;
+    width: 100%;
+  }
+  .dg-editor-tools button {
+    width: 26px;
+    height: 29px;
+  }
+  .dg-editor-tool-divider {
+    margin-inline: 3px;
+  }
+  .dg-editor-view-switch {
+    margin-left: 0;
+  }
+  .dg-editor-split .dg-editor-canvas {
+    display: flex;
+    flex-direction: column;
+    height: 560px;
+  }
+  .dg-editor-split .dg-editor-writing,
+  .dg-editor-split .dg-editor-reading {
+    height: 50%;
+  }
+  .dg-editor-split .dg-editor-reading {
+    border-left: 0;
+    border-top: 1px solid color-mix(in srgb, currentColor 8%, transparent);
+  }
+  .dg-markdown-editor .cm-line {
+    padding: 0 16px;
+  }
+  .dg-editor-reading {
+    padding: 16px;
+  }
+}

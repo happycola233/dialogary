@@ -1,18 +1,25 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { lazy, Suspense } from 'react'
-import clsx from 'clsx'
+import { X } from 'lucide-react'
 import { ChatPane } from './components/ChatPane'
 import { ExportDialog } from './components/ExportDialog'
 import { Lightbox } from './components/Lightbox'
 
 // recharts 体积不小，统计页按需加载
-const StatsView = lazy(() => import('./components/StatsView').then((m) => ({ default: m.StatsView })))
+const StatsView = lazy(() =>
+  import('./components/StatsView').then((m) => ({ default: m.StatsView })),
+)
 import { SearchDialog } from './components/SearchDialog'
 import { SettingsDialog } from './components/SettingsDialog'
 import { Sidebar } from './components/Sidebar'
 import { Toasts } from './components/Toasts'
+import { Tooltips } from './components/ui/Tooltips'
 import { TopBar } from './components/TopBar'
+import { TimelineNav } from './components/TimelineNav'
 import { WelcomeScreen } from './components/WelcomeScreen'
+import { WorkspacePanels } from './components/WorkspacePanels'
+import { ReadingToolbar } from './components/ReadingToolbar'
+import { ReviewView } from './components/ReviewView'
 import { filesFromDataTransfer } from './data/pickSource'
 import { initTheme } from './lib/theme'
 import { useAppStore } from './model/store'
@@ -80,12 +87,40 @@ export default function App() {
     void bootstrap()
   }, [bootstrap])
 
+  useEffect(() => {
+    const preservePendingDraft = (event: BeforeUnloadEvent) => {
+      const state = useAppStore.getState()
+      if (state.draftStatus !== 'saved' && state.text !== state.baseline) event.preventDefault()
+    }
+    window.addEventListener('beforeunload', preservePendingDraft)
+    return () => window.removeEventListener('beforeunload', preservePendingDraft)
+  }, [])
+
   // Ctrl/Cmd+K 打开搜索
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      if (e.defaultPrevented) return
+      const dialogOpen = Boolean(document.querySelector('dialog[open]'))
+      const editing =
+        e.target instanceof HTMLElement &&
+        (e.target.matches('input, textarea, select') || e.target.isContentEditable)
+      if (!dialogOpen && !editing && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         useAppStore.getState().setSearchOpen(true)
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault()
+        if (!dialogOpen) useAppStore.getState().setPanel('save-review')
+      }
+      if (
+        !editing &&
+        !dialogOpen &&
+        (e.ctrlKey || e.metaKey) &&
+        ['z', 'y'].includes(e.key.toLowerCase())
+      ) {
+        e.preventDefault()
+        if (e.shiftKey || e.key.toLowerCase() === 'y') useAppStore.getState().redo()
+        else useAppStore.getState().undo()
       }
     }
     window.addEventListener('keydown', onKey)
@@ -96,6 +131,7 @@ export default function App() {
   useEffect(() => {
     let depth = 0
     const onEnter = (e: DragEvent) => {
+      if (document.querySelector('dialog[open]')) return
       if (e.dataTransfer?.types.includes('Files')) {
         depth++
         setDragging(true)
@@ -110,6 +146,7 @@ export default function App() {
       e.preventDefault()
       depth = 0
       setDragging(false)
+      if (document.querySelector('dialog[open]')) return
       if (e.dataTransfer) {
         void filesFromDataTransfer(e.dataTransfer).then((files) => {
           if (files.length) void useAppStore.getState().openFiles(files)
@@ -129,7 +166,17 @@ export default function App() {
   }, [])
 
   return (
-    <div className="flex h-dvh flex-col bg-white text-neutral-800 dark:bg-black dark:text-neutral-100">
+    <div
+      className="dg-app flex h-dvh flex-col bg-white text-neutral-800 dark:bg-black dark:text-neutral-100"
+      data-nav-collapsed={sidebarCollapsed}
+      data-nav-resizing={resizing}
+      style={
+        {
+          '--dg-nav-width': `${sidebarCollapsed ? 64 : sidebarWidth}px`,
+          '--dg-nav-expanded-width': `${sidebarWidth}px`,
+        } as React.CSSProperties
+      }
+    >
       {load.phase === 'ready' ? (
         <>
           <TopBar
@@ -139,44 +186,29 @@ export default function App() {
           />
           <div className="flex min-h-0 flex-1">
             <aside
-              className={clsx(
-                'relative hidden shrink-0 overflow-hidden bg-neutral-50 md:block dark:bg-neutral-900',
-                !sidebarCollapsed && 'border-r border-neutral-200/80 dark:border-neutral-800',
-                // 折叠/展开用宽度过渡动画；拖拽调宽时关掉过渡跟手
-                !resizing && 'transition-[width] duration-300 ease-out',
-              )}
-              style={{ width: sidebarCollapsed ? 0 : sidebarWidth }}
+              aria-label={sidebarCollapsed ? '快捷导航' : '日记导航'}
+              className="dg-sidebar dg-desktop-sidebar relative hidden shrink-0 overflow-hidden md:block"
             >
-              {/* 内容固定为当前侧栏宽度，折叠动画期间不回流 */}
-              <div className="h-full" style={{ width: sidebarWidth }}>
-                <Sidebar />
-              </div>
+              <Sidebar collapsed={sidebarCollapsed} />
               {!sidebarCollapsed && (
                 <div
                   onPointerDown={startSidebarResize}
                   title="拖拽调整宽度"
-                  className="absolute inset-y-0 right-0 z-20 w-1 cursor-col-resize transition-colors hover:bg-indigo-400/50 active:bg-indigo-400/70"
+                  className="dg-sidebar-resize absolute inset-y-0 right-0 z-20 w-1 cursor-col-resize transition-colors"
                 />
               )}
             </aside>
-            {sidebarOpen && (
-              <div className="fixed inset-0 z-40 md:hidden">
-                <div
-                  className="absolute inset-0 bg-black/40"
-                  onClick={() => setSidebarOpen(false)}
-                />
-                <div className="absolute inset-y-0 left-0 w-80 max-w-[85vw] bg-neutral-50 pt-[env(safe-area-inset-top)] shadow-xl dark:bg-neutral-900">
-                  <Sidebar onNavigate={() => setSidebarOpen(false)} />
-                </div>
-              </div>
-            )}
+            {sidebarOpen && <MobileNavigation onClose={() => setSidebarOpen(false)} />}
             {/* 普通阅读交给浏览器原生滚动锚定；目录动画期间保持单一 scrollTop 写入者。 */}
-            <main
-              className="hc-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain"
-              style={{ overflowAnchor: jumping ? 'none' : 'auto' }}
-            >
-              <ViewSwitch />
-            </main>
+            <div className="dg-reading-area relative min-w-0 flex-1">
+              <main
+                className="hc-scrollbar h-full min-h-0 overflow-y-auto overscroll-contain"
+                style={{ overflowAnchor: jumping ? 'none' : 'auto' }}
+              >
+                <ViewSwitch />
+              </main>
+              <TimelineNav />
+            </div>
           </div>
         </>
       ) : load.phase === 'loading' ? (
@@ -193,25 +225,77 @@ export default function App() {
           </p>
         </div>
       )}
+      <WorkspacePanels />
       <SearchDialog />
       <ExportDialog />
       <SettingsDialog />
       <Lightbox />
       <Toasts />
+      <Tooltips />
     </div>
+  )
+}
+
+function MobileNavigation({ onClose }: { onClose: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null)
+  useEffect(() => {
+    const dialog = ref.current!
+    dialog.showModal()
+    return () => dialog.close()
+  }, [])
+  return (
+    <dialog
+      ref={ref}
+      aria-label="日记导航"
+      onCancel={onClose}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          const bounds = event.currentTarget.getBoundingClientRect()
+          if (event.clientX > bounds.right) onClose()
+        }
+      }}
+      className="dg-sidebar fixed inset-y-0 left-0 m-0 flex h-dvh max-h-dvh w-80 max-w-[85vw] flex-col border-0 p-0 pt-[env(safe-area-inset-top)] text-neutral-800 shadow-xl backdrop:bg-black/35 dark:text-neutral-100"
+    >
+      <div className="flex h-[72px] shrink-0 items-center justify-between px-5">
+        <span className="text-lg font-semibold">Dialogary</span>
+        <button className="dg-icon" aria-label="关闭导航" onClick={onClose}>
+          <X size={18} />
+        </button>
+      </div>
+      <div className="min-h-0 flex-1">
+        <Sidebar onNavigate={onClose} />
+      </div>
+    </dialog>
   )
 }
 
 function ViewSwitch() {
   const view = useAppStore((s) => s.view)
+  const positions = useRef<Record<string, number>>({})
+  useLayoutEffect(() => {
+    const scroller = document.querySelector('main')!
+    scroller.scrollTop = positions.current[view] ?? 0
+    // 视图隐藏后浏览器会立即压缩 scrollTop，不能等 effect cleanup 再读取旧视图位置。
+    const remember = () => {
+      positions.current[view] = scroller.scrollTop
+    }
+    scroller.addEventListener('scroll', remember, { passive: true })
+    return () => {
+      scroller.removeEventListener('scroll', remember)
+    }
+  }, [view])
   return (
     <>
       {/* ChatPane 常驻保留滚动位置与已挂载内容，统计视图叠加显示 */}
       <div className={view === 'chat' ? undefined : 'hidden'}>
+        <ReadingToolbar />
         <ChatPane />
       </div>
+      {view === 'review' && <ReviewView />}
       {view === 'stats' && (
-        <Suspense fallback={<p className="py-16 text-center text-sm text-neutral-400">加载统计…</p>}>
+        <Suspense
+          fallback={<p className="py-16 text-center text-sm text-neutral-400">加载统计…</p>}
+        >
           <StatsView />
         </Suspense>
       )}
