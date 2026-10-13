@@ -18,6 +18,8 @@ vi.mock('../data/fileAccess', () => ({
 vi.mock('../data/pickSource', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../data/pickSource')>()),
   assetsFromDirectory: vi.fn(),
+  supportsDirectoryPicker: vi.fn(() => true),
+  pickDirectoryModern: vi.fn(),
 }))
 vi.mock('../data/workspace', () => ({
   persistWorkspace: vi.fn().mockResolvedValue(undefined),
@@ -735,6 +737,94 @@ describe('外部修改与重新载入', () => {
     expect(useAppStore.getState().text).toBe(SOURCE)
   })
 
+  it('记录编辑器中的未保存修改保留原基线，写回时仍会提示外部冲突', async () => {
+    const message = useAppStore.getState().doc!.messages[0]!
+    const draft = createMessageDraft(message, '2026-09-19')
+    draft.mood = '平静'
+    useAppStore.getState().setEditor({ id: message.id })
+    const external = SOURCE.replace('第一段', '外部修改的正文')
+    useAppStore.setState({ fileHandle: handleWith(external) })
+
+    await useAppStore.getState().syncWithDisk()
+    expect(useAppStore.getState()).toMatchObject({ text: SOURCE, baseline: SOURCE })
+    await useAppStore.getState().saveMessage(draft, message.id)
+    await useAppStore.getState().saveFile()
+
+    expect(fileAccess.writeFile).not.toHaveBeenCalled()
+    expect(useAppStore.getState()).toMatchObject({ fileStatus: 'conflict', externalText: external })
+    expect(useAppStore.getState().doc!.messages[0]!.mood).toBe('平静')
+  })
+
+  it.each(['date', 'source', 'document'] as const)('%s 编辑期间暂缓正文同步，关闭后可以载入', async (editor) => {
+    const external = SOURCE.replace('第一段', '外部修改的正文')
+    useAppStore.setState({ fileHandle: handleWith(external) })
+    if (editor === 'date') useAppStore.getState().setDateEditor(0)
+    else useAppStore.getState().setPanel(editor)
+
+    await useAppStore.getState().syncWithDisk()
+    expect(useAppStore.getState()).toMatchObject({ text: SOURCE, baseline: SOURCE })
+    useAppStore.setState({ dateEditor: null, panel: null })
+    await useAppStore.getState().syncWithDisk()
+    expect(useAppStore.getState()).toMatchObject({ text: external, baseline: external })
+  })
+
+  it('目录扫描期间完成保存，不会用保存前的正文和附件快照回退草稿', async () => {
+    const handle = handleWith(SOURCE)
+    const backup = handleWith('')
+    const directoryHandle = {
+      getDirectoryHandle: async () => ({ getFileHandle: async () => backup }),
+    } as unknown as FileSystemDirectoryHandle
+    useAppStore.setState({ fileHandle: handle, directoryHandle })
+    const saved = SOURCE.replace('第一段', '刚刚保存的内容')
+    useAppStore.getState().commitText(saved, '编辑正文')
+    let finishScan!: (files: Map<string, File>) => void
+    vi.mocked(pickSource.assetsFromDirectory).mockImplementationOnce(
+      () => new Promise((resolve) => { finishScan = resolve }),
+    )
+    const check = useAppStore.getState().syncWithDisk()
+    await vi.waitFor(() => expect(finishScan).toBeTypeOf('function'))
+
+    vi.mocked(fileAccess.writeFile)
+      .mockResolvedValueOnce(undefined)
+      .mockImplementationOnce(async () => {
+        vi.mocked(handle.getFile).mockResolvedValue(new File([saved], handle.name))
+      })
+    await useAppStore.getState().saveFile()
+    expect(useAppStore.getState().fileStatus).toBe('saved')
+    const savedState = useAppStore.getState()
+    finishScan(new Map([['stale.png', new File(['旧快照'], 'stale.png')]]))
+    await check
+
+    expect(useAppStore.getState()).toMatchObject({ text: saved, baseline: saved, fileStatus: 'saved' })
+    expect(useAppStore.getState().assets).toBe(savedState.assets)
+    expect(useAppStore.getState().past).toBe(savedState.past)
+  })
+
+  it('扫描期间另存为，即使基线文本未变也不能载入原文件的旧结果', async () => {
+    useAppStore.setState({
+      fileHandle: handleWith(SOURCE.replace('第一段', '原文件外部修改')),
+      directoryHandle: {} as FileSystemDirectoryHandle,
+    })
+    let finishScan!: (files: Map<string, File>) => void
+    vi.mocked(pickSource.assetsFromDirectory).mockImplementationOnce(
+      () => new Promise((resolve) => { finishScan = resolve }),
+    )
+    const check = useAppStore.getState().syncWithDisk()
+    await vi.waitFor(() => expect(finishScan).toBeTypeOf('function'))
+    const savedHandle = handleWith('')
+    vi.mocked(savedHandle.isSameEntry).mockResolvedValue(false)
+    vi.mocked(fileAccess.chooseSaveFile).mockResolvedValueOnce(savedHandle)
+    vi.mocked(fileAccess.writeFile).mockImplementationOnce(async () => {
+      vi.mocked(savedHandle.getFile).mockResolvedValue(new File([SOURCE], savedHandle.name))
+    })
+    await useAppStore.getState().saveFile(true)
+    expect(useAppStore.getState().fileStatus).toBe('saved')
+    finishScan(new Map())
+    await check
+
+    expect(useAppStore.getState()).toMatchObject({ text: SOURCE, baseline: SOURCE, fileHandle: savedHandle })
+  })
+
   it('附件目录变化时换用新文件，尚未写入目录的附件保持不变', async () => {
     const original = new File(['原图'], 'a.jpg', { lastModified: 1 })
     const pending = new File(['新附件'], 'b.jpg', { lastModified: 1 })
@@ -756,5 +846,62 @@ describe('外部修改与重新载入', () => {
     expect(assets.get('assets/a.jpg')).toBe(replaced)
     expect(assets.get('assets/b.jpg')).toBe(pending)
     expect(text).toBe(SOURCE)
+  })
+
+  it('另行关联的附件不被日记目录覆盖或删除，恢复工作区后仍保留来源', async () => {
+    const original = new File(['日记目录中的原图'], 'same.png', { lastModified: 1 })
+    const linked = new File(['重新选择的图片'], 'same.png', { lastModified: 2 })
+    const extra = new File(['目录之外的附件'], 'extra.png')
+    const updated = new File(['目录内的新附件'], 'normal.png')
+    useAppStore.setState({
+      fileHandle: handleWith(SOURCE),
+      directoryHandle: {} as FileSystemDirectoryHandle,
+      assets: new Map([['same.png', original], ['deleted.png', original]]),
+    })
+    vi.mocked(pickSource.pickDirectoryModern).mockResolvedValueOnce({
+      handle: {} as FileSystemDirectoryHandle,
+      files: [{ relPath: 'same.png', file: linked }, { relPath: 'extra.png', file: extra }],
+    })
+    await useAppStore.getState().reconnectImages()
+    const scanned = new Map([['same.png', original], ['normal.png', updated]])
+    vi.mocked(pickSource.assetsFromDirectory).mockResolvedValueOnce(new Map(scanned))
+    await useAppStore.getState().syncWithDisk()
+
+    const expected = new Map([['same.png', linked], ['extra.png', extra], ['normal.png', updated]])
+    expect(useAppStore.getState().assets).toEqual(expected)
+    const saved = vi.mocked(workspace.persistWorkspace).mock.calls.at(-1)![0]
+    expect(saved.reconnectedAssetPaths).toEqual(['same.png', 'extra.png'])
+    vi.mocked(workspace.workspaceFor).mockResolvedValueOnce(saved)
+    useAppStore.getState().loadText('另一本.chat.md', SOURCE)
+    expect(useAppStore.getState().reconnectedAssetPaths.size).toBe(0)
+    vi.mocked(pickSource.assetsFromDirectory).mockResolvedValueOnce(new Map(scanned))
+    await useAppStore.getState().openWorkspace(saved.key)
+    expect(useAppStore.getState().assets).toEqual(expected)
+  })
+
+  it('重新选回日记所在目录后，同路径附件继续跟随磁盘更新和删除', async () => {
+    const handle = handleWith(SOURCE)
+    const original = new File(['选回原图'], 'same.png', { lastModified: 1 })
+    const replaced = new File(['磁盘上替换的图片'], 'same.png', { lastModified: 2 })
+    useAppStore.setState({
+      fileHandle: handle,
+      directoryHandle: {} as FileSystemDirectoryHandle,
+      reconnectedAssetPaths: new Set(['same.png']),
+    })
+    vi.mocked(pickSource.pickDirectoryModern).mockResolvedValueOnce({
+      handle: {} as FileSystemDirectoryHandle,
+      files: [
+        { relPath: handle.name, file: await handle.getFile(), handle },
+        { relPath: 'same.png', file: original },
+      ],
+    })
+    await useAppStore.getState().reconnectImages()
+    expect(useAppStore.getState().reconnectedAssetPaths.size).toBe(0)
+    vi.mocked(pickSource.assetsFromDirectory).mockResolvedValueOnce(new Map([['same.png', replaced]]))
+    await useAppStore.getState().syncWithDisk()
+    expect(useAppStore.getState().assets.get('same.png')).toBe(replaced)
+    vi.mocked(pickSource.assetsFromDirectory).mockResolvedValueOnce(new Map())
+    await useAppStore.getState().syncWithDisk()
+    expect(useAppStore.getState().assets.has('same.png')).toBe(false)
   })
 })

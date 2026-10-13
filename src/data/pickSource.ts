@@ -11,7 +11,6 @@ export interface PickedFile {
 export interface PickedSource {
   name: string
   text: string
-  resolver: AssetResolver
   assets: Map<string, File>
   handle?: FileSystemFileHandle
 }
@@ -107,6 +106,7 @@ export function createFileAssetResolver(fileMap: Map<string, File>): AssetResolv
  * 从一组带相对路径的文件构建数据源：
  * 找到 *.chat.md（多个时取路径最浅、名字最短的），其余文件按「相对聊天文件所在目录」注册为附件。
  * 重新关联时指定 preferredName；找不到或同名存在歧义时返回 null，绝不换成另一本日记。
+ * 这里只读取数据；调用方实际切换附件时再创建解析器，避免目录扫描撤销当前图片的 URL。
  */
 export async function sourceFromFiles(files: PickedFile[], preferredName?: string): Promise<PickedSource | null> {
   const normalizedFiles = files.map((file) => ({ ...file, relPath: slashPath(file.relPath) }))
@@ -126,7 +126,6 @@ export async function sourceFromFiles(files: PickedFile[], preferredName?: strin
   return {
     name,
     text,
-    resolver: fileMap.size ? createFileAssetResolver(fileMap) : nullAssetResolver,
     assets: fileMap,
     handle: chat.handle,
   }

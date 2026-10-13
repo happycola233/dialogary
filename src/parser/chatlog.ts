@@ -461,7 +461,7 @@ function metadataFor(object: Message | Session): Metadata {
 }
 
 /** 重写单个顶层键：沿用原键的写法；原本写在一行的集合、带引号的文字保持同样的风格。 */
-function pairText(key: Scalar, original: unknown, value: unknown): string {
+function pairText(key: Scalar, original: unknown, value: unknown, blockQuote: boolean): string {
   const doc = new Document({ [String(key.value)]: value })
   const pair = (doc.contents as YAMLMap).items[0]!
   const name = key.clone() as Scalar
@@ -473,7 +473,7 @@ function pairText(key: Scalar, original: unknown, value: unknown): string {
     isScalar(original) && isScalar(pair.value) && typeof value === 'string' &&
     (original.type === Scalar.QUOTE_DOUBLE || original.type === Scalar.QUOTE_SINGLE)
   ) pair.value.type = original.type
-  return doc.toString({ lineWidth: 0, flowCollectionPadding: false })
+  return doc.toString({ lineWidth: 0, flowCollectionPadding: false, blockQuote })
 }
 
 /**
@@ -496,12 +496,14 @@ function spliceYaml(text: string, meta: Metadata): string | null {
     if (start > 0 && text[start - 1] !== '\n') return null
     // 块状取值的范围已包含行尾换行，行内取值不含；替换后保持同样的结尾。
     const end = value.range[1]
+    const endsWithNewline = text[end - 1] === '\n'
     if (!(key.value in meta)) {
-      const lineEnd = text[end - 1] === '\n' ? end : text.indexOf('\n', end) + 1 || text.length
+      const lineEnd = endsWithNewline ? end : text.indexOf('\n', end) + 1 || text.length
       edits.push({ start, end: lineEnd, text: '' })
     } else if (json(before[key.value]) !== json(meta[key.value])) {
-      const rendered = pairText(key, value, meta[key.value])
-      edits.push({ start, end, text: text[end - 1] === '\n' ? rendered : rendered.replace(/\n$/, '') })
+      // 行内值后面还可能有原样保留的注释；多行文本使用引号，不能让注释变成块标量正文。
+      const rendered = pairText(key, value, meta[key.value], endsWithNewline)
+      edits.push({ start, end, text: endsWithNewline ? rendered : rendered.replace(/\n$/, '') })
     }
   }
   let result = text

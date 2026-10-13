@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createFileAssetResolver, pickDirectoryModern, sourceFromFiles, walkDirectoryHandle } from './pickSource'
+import { assetsFromDirectory, createFileAssetResolver, pickDirectoryModern, sourceFromFiles, walkDirectoryHandle } from './pickSource'
 
 const createUrl = vi.fn((file: Blob | MediaSource) => `blob:test-${file instanceof Blob ? file.size : 0}`)
 beforeEach(() => { vi.spyOn(URL, 'createObjectURL').mockImplementation(createUrl); vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {}); createUrl.mockClear() })
@@ -63,7 +63,7 @@ describe('目录与 Markdown 所在位置', () => {
     ], '当前.chat.md')
     expect(source?.name).toBe('当前.chat.md')
     expect(source?.text).toBe('当前正文')
-    expect(source?.resolver('assets/p.png')).toBe('blob:test-3')
+    expect(createFileAssetResolver(source!.assets)('assets/p.png')).toBe('blob:test-3')
   })
 
   it('找不到当前日记或同名文件有歧义时返回 null，明确路径可消除歧义', async () => {
@@ -89,9 +89,27 @@ describe('目录与 Markdown 所在位置', () => {
     ])
     expect(source?.name).toBe('diary.chat.md')
     expect([...source!.assets.keys()]).toEqual(['assets/p.png', '../assets/p.png'])
-    expect(source!.resolver('assets/p.png')).toBe('blob:test-3')
-    expect(source!.resolver('../assets/p.png')).toBe('blob:test-7')
-    expect(source!.resolver('wrong/p.png')).toBeNull()
+    const resolve = createFileAssetResolver(source!.assets)
+    expect(resolve('assets/p.png')).toBe('blob:test-3')
+    expect(resolve('../assets/p.png')).toBe('blob:test-7')
+    expect(resolve('wrong/p.png')).toBeNull()
+  })
+
+  it('只扫描目录时，当前附件的对象 URL 仍能读取', async () => {
+    vi.mocked(URL.createObjectURL).mockRestore()
+    vi.mocked(URL.revokeObjectURL).mockRestore()
+    const photo = new File(['虚构附件'], 'photo.png')
+    const diary = fileHandle('diary.chat.md', '虚构正文')
+    const photoHandle = { kind: 'file', getFile: async () => photo } as FileSystemFileHandle
+    const dir = directory('journal', { 'diary.chat.md': diary, 'photo.png': photoHandle })
+    const resolve = createFileAssetResolver(new Map([['photo.png', photo]]))
+    const url = resolve('photo.png')!
+    expect(await (await fetch(url)).text()).toBe('虚构附件')
+
+    expect((await assetsFromDirectory(dir, diary.name))?.get('photo.png')).toBe(photo)
+    expect(resolve('photo.png')).toBe(url)
+    expect(await (await fetch(url)).text()).toBe('虚构附件')
+    createFileAssetResolver(new Map())
   })
 
   it('递归选择不会读备份、构建输出和依赖；写回基准是聊天父目录', async () => {

@@ -137,6 +137,30 @@ describe('v2 保真读写', () => {
       expect(first(parseChatlog(result)).reactions).toEqual(['🌱'])
     })
 
+    it.each(['LF', 'CRLF'])('%s 下行内值改为多行文本或嵌套结构时，注释不会混入取值', (newline) => {
+      const convert = (text: string) => newline === 'CRLF' ? text.replaceAll('\n', '\r\n') : text
+      const original = convert(source(['x-note: 原值   # 留下说明', ...meta]))
+      for (const value of ['第一行\n第二行', { text: '第一行\n第二行\n' }]) {
+        const doc = parseChatlog(original)
+        first(doc).meta['x-note'] = value
+        const result = serializeChatlog(doc)
+        const reparsed = parseChatlog(result)
+        expect(reparsed.issues).toEqual([])
+        expect(first(reparsed).meta['x-note']).toEqual(value)
+        expect(result).toContain(convert('   # 留下说明\n'))
+        expect(result).toContain(convert(meta.join('\n') + '\n'))
+      }
+    })
+
+    it('原本使用块标量的字段修改后仍保留块写法与后续注释', () => {
+      const original = source(['x-note: |-', '  第一行', '  第二行', '# 后续字段的说明', ...meta])
+      const doc = parseChatlog(original)
+      first(doc).meta['x-note'] = '新的第一行\n新的第二行'
+      const result = serializeChatlog(doc)
+      expect(result).toContain('x-note: |-\n  新的第一行\n  新的第二行\n# 后续字段的说明\n')
+      expect(first(parseChatlog(result)).meta['x-note']).toBe('新的第一行\n新的第二行')
+    })
+
     it('文档头只改写标题，其余字段与注释保持原样', () => {
       const header = '---\nformat: chatlog-md/2\ntitle: 虚构测试   # 名称\ntimezone: "Asia/Shanghai"\nx-tags: [甲, 乙]\n---\n\n'
       const doc = parseChatlog(header + '## 🧑‍💻 @user\n\n正文\n')

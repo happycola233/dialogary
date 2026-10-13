@@ -17,6 +17,8 @@ export interface WorkspaceSnapshot {
   assets: [string, File][]
   /** 已加入草稿但尚未写入授权目录的附件，刷新后仍需保存。 */
   pendingAssets?: string[]
+  /** 从其他目录另行关联的附件，不能被日记目录的扫描结果覆盖。 */
+  reconnectedAssetPaths?: string[]
   fileHandle?: FileSystemFileHandle
   directoryHandle?: FileSystemDirectoryHandle
   revisions: Revision[]

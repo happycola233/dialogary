@@ -86,6 +86,7 @@ interface AppState {
   directoryHandle?: FileSystemDirectoryHandle
   assets: Map<string, File>
   pendingAssets: Set<string>
+  reconnectedAssetPaths: Set<string>
   resolveAsset: AssetResolver
   draftStatus: 'saved' | 'saving' | 'error'
   fileStatus: 'idle' | 'saving' | 'saved' | 'downloaded' | 'conflict' | 'error'
@@ -173,6 +174,7 @@ interface AppState {
 const READING_ID = Symbol('readingId')
 type EditableMessage = Message & { [READING_ID]?: string }
 let draftSequence = 0
+let fileSaveSequence = 0
 let diskCheck: Promise<void> | null = null
 
 /** 本地附件优先；随应用部署的网页数据再回退到服务器上的附件。 */
@@ -254,6 +256,7 @@ function snapshot(state: AppState): WorkspaceSnapshot {
     fileHandle: state.fileHandle,
     directoryHandle: state.directoryHandle,
     pendingAssets: [...state.pendingAssets],
+    reconnectedAssetPaths: [...state.reconnectedAssetPaths],
     revisions: state.revisions,
     past: state.past,
     future: state.future,
@@ -288,6 +291,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   load: { phase: 'loading' },
   assets: new Map(),
   pendingAssets: new Set(),
+  reconnectedAssetPaths: new Set(),
   resolveAsset: serverAssetResolver,
   draftStatus: 'saved',
   fileStatus: 'idle',
@@ -332,6 +336,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         future: restored?.future ?? [],
         assets,
         pendingAssets: new Set(restored?.pendingAssets ?? []),
+        reconnectedAssetPaths: new Set(restored?.reconnectedAssetPaths ?? []),
         resolveAsset: createFileAssetResolver(assets),
       })
       return
@@ -357,6 +362,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           past: restored.past ?? [],
           future: restored.future ?? [],
           pendingAssets: new Set(restored.pendingAssets ?? []),
+          reconnectedAssetPaths: new Set(restored.reconnectedAssetPaths ?? []),
           resolveAsset: resolverFor(assets, restored.sourceKind),
         })
         // 关闭页面期间文件可能被其他编辑器修改；仍有读取授权时立即核对。
@@ -398,6 +404,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       directoryHandle: undefined,
       assets: new Map(),
       pendingAssets: new Set(),
+      reconnectedAssetPaths: new Set(),
       editor: null,
       dateEditor: null,
       panel: null,
@@ -429,7 +436,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       showToast('没有找到 Markdown 文件')
       return false
     }
-    get().loadText(source.name, source.text, source.resolver)
+    get().loadText(source.name, source.text, createFileAssetResolver(source.assets))
     set({ assets: source.assets, fileHandle: source.handle, sourceKind: 'files' })
     await get().saveDraft()
     return true
@@ -486,6 +493,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       future: restored.future ?? [],
       assets,
       pendingAssets: new Set(restored.pendingAssets ?? []),
+      reconnectedAssetPaths: new Set(restored.reconnectedAssetPaths ?? []),
       fileHandle: restored.fileHandle,
       directoryHandle: restored.directoryHandle,
       resolveAsset: resolverFor(assets, restored.sourceKind),
@@ -517,13 +525,23 @@ export const useAppStore = create<AppState>((set, get) => ({
       return
     }
     if (!picked) return
-    const source = await sourceFromFiles(picked.files, get().sourceName ?? undefined)
+    const initial = get()
+    const source = await sourceFromFiles(picked.files, initial.sourceName ?? undefined)
+    const fromDiaryDirectory =
+      !!initial.directoryHandle && !!initial.fileHandle && !!source?.handle &&
+      (await source.handle.isSameEntry(initial.fileHandle))
+    if (get().sourceKey !== initial.sourceKey) return
     const assets = new Map(get().assets)
+    const reconnectedAssetPaths = new Set(get().reconnectedAssetPaths)
     for (const [path, file] of source?.assets ??
-      picked.files.map((file) => [file.relPath, file.file] as const))
+      picked.files.map((file) => [file.relPath, file.file] as const)) {
       assets.set(path, file)
+      // 重新选回日记所在目录时恢复自动刷新；其他目录的附件保留用户明确选择的文件。
+      if (fromDiaryDirectory) reconnectedAssetPaths.delete(path)
+      else reconnectedAssetPaths.add(path)
+    }
     // 重新关联仅补充资源，不切换文档，也不改变当前文件的写入目录。
-    set({ assets, resolveAsset: resolverFor(assets, get().sourceKind) })
+    set({ assets, reconnectedAssetPaths, resolveAsset: resolverFor(assets, get().sourceKind) })
     await get().saveDraft()
     showToast('已重新关联附件')
   },
@@ -567,6 +585,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         showToast('请将日记与附件一起保存为归档包；写回原文件可先打开所在文件夹')
         return
       }
+      fileSaveSequence++
       set({ fileStatus: 'saving' })
       let handle = asNew ? undefined : initial.fileHandle
       if (!handle) {
@@ -639,8 +658,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     diskCheck = (async () => {
       const initial = get()
       if (!initial.doc || initial.fileStatus === 'saving') return
+      const saveSequence = fileSaveSequence
+      // 保存可能在目录扫描期间完整结束；此前读到的文件与附件快照都不能再应用。
       const stillCurrent = () =>
-        get().sourceKey === initial.sourceKey && get().fileStatus !== 'saving'
+        get().sourceKey === initial.sourceKey &&
+        get().baseline === initial.baseline &&
+        fileSaveSequence === saveSequence &&
+        get().fileStatus !== 'saving'
       // 先确认文件夹授权：它同时覆盖其中的日记文件，避免连续弹出两次授权。
       const directoryReadable =
         !!initial.directoryHandle && (await canRead(initial.directoryHandle, request))
@@ -673,9 +697,13 @@ export const useAppStore = create<AppState>((set, get) => ({
         ).catch(() => null)
         const current = get()
         if (scanned && stillCurrent()) {
-          // 尚未写入目录的新附件，以及日记目录之外（../）的引用，继续使用已载入的文件。
+          // 只刷新日记目录拥有的附件；待写入、另行关联和目录之外的资源仍使用已载入的文件。
           for (const [path, file] of current.assets)
-            if (current.pendingAssets.has(path) || path.startsWith('../')) scanned.set(path, file)
+            if (
+              current.pendingAssets.has(path) ||
+              current.reconnectedAssetPaths.has(path) ||
+              path.startsWith('../')
+            ) scanned.set(path, file)
           if (!sameAssets(current.assets, scanned)) {
             set({ assets: scanned, resolveAsset: resolverFor(scanned, current.sourceKind) })
             assetsChanged = true
@@ -685,11 +713,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (!stillCurrent()) return
 
       const state = get()
-      // 已提示过的同一份外部内容只在主动载入时再次对照；整份源文件编辑中时留到保存前核对。
+      // 编辑器中的草稿尚未进入 state.text，保持原基线，后续保存仍能发现外部冲突。
+      const editing = state.editor !== null || state.dateEditor !== null ||
+        state.panel === 'source' || state.panel === 'document'
+      // 已提示过的同一份外部内容只在主动载入时再次对照。
       const textChanged =
         external !== state.baseline &&
         (request || external !== state.externalText) &&
-        state.panel !== 'source'
+        !editing
       if (textChanged) {
         if (external === state.text)
           set({
@@ -703,7 +734,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           showToast('已载入文件的最新内容')
         } else set({ fileStatus: 'conflict', externalText: external })
       } else if (assetsChanged) showToast('附件已更新')
-      else if (request) showToast('文件没有新的修改')
+      else if (request) showToast(editing ? '完成编辑后，可重新载入文件' : '文件没有新的修改')
       if (textChanged || assetsChanged) await get().saveDraft()
     })().finally(() => {
       diskCheck = null
