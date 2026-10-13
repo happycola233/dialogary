@@ -460,7 +460,7 @@ export function JournalEditor({
             <Field label="时间（可留空）">
               <input
                 type="time"
-                step={clock.length > 5 ? 1 : 60}
+                step={1}
                 value={clock}
                 disabled={!draft.date && !draft.time}
                 onChange={(event) =>
