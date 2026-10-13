@@ -127,7 +127,7 @@ export const MessageItem = memo(function MessageItem({
   const mine = msg.role === 'user'
   const contentRef = useMessageBubbleSpacing(mine && !diary)
   const select = state.selected.has(msg.id)
-  const edit = (tab?: string) => state.setEditor({ id: msg.id, date: msg.effectiveDate ?? '', tab })
+  const edit = (tab?: string) => state.setEditor({ id: msg.id, tab })
   const reaction = (emoji: string) => {
     state.patchMessages(
       [msg.id],
@@ -328,7 +328,11 @@ export const MessageItem = memo(function MessageItem({
                 </button>
                 <button
                   onClick={() => {
-                    state.setEditor({ date: msg.effectiveDate ?? todayString(), afterId: msg.id })
+                    // 插入到同一日期节，紧跟在这条记录之后。
+                    state.setEditor({
+                      date: state.doc!.sessions[msg.sessionIndex]?.date ?? todayString(),
+                      afterId: msg.id,
+                    })
                     close()
                   }}
                 >

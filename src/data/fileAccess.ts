@@ -27,6 +27,23 @@ export async function chooseSaveFile(name: string): Promise<FileSystemFileHandle
   }
 }
 
+type PermissionDescriptor = { mode: 'read' | 'readwrite' }
+type PermissionedHandle = FileSystemHandle & {
+  queryPermission?: (descriptor: PermissionDescriptor) => Promise<PermissionState>
+  requestPermission?: (descriptor: PermissionDescriptor) => Promise<PermissionState>
+}
+
+/** 刷新页面后，已保存句柄的读取授权可能需要重新确认；request 只能在用户点击时使用。 */
+export async function canRead(handle: FileSystemHandle, request = false): Promise<boolean> {
+  const target = handle as PermissionedHandle
+  try {
+    if ((await target.queryPermission?.({ mode: 'read' })) === 'granted') return true
+    return request && (await target.requestPermission?.({ mode: 'read' })) === 'granted'
+  } catch {
+    return false
+  }
+}
+
 export async function writeFile(handle: FileSystemFileHandle, text: string | Blob): Promise<void> {
   const writable = await handle.createWritable()
   try {

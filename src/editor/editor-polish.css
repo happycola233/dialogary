@@ -1,3 +1,18 @@
+/*
+ * 单层大半径阴影在深色背景上只有少数几级灰度可用，会出现一圈圈色带；
+ * 改用多层短阴影平滑过渡，深色模式再以细描边勾出边界，不依赖阴影区分层级。
+ */
+.dg-editor-dialog {
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.04),
+    0 4px 12px rgb(0 0 0 / 0.06),
+    0 16px 40px rgb(0 0 0 / 0.1);
+}
+.dark .dg-editor-dialog {
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.08),
+    0 8px 24px rgb(0 0 0 / 0.35);
+}
 .dg-editor-dialog[open] {
   animation: dg-editor-enter 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }

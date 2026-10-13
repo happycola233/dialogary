@@ -61,7 +61,7 @@ export function EditorDialog({
         if (event.target === event.currentTarget) onClose()
       }}
       className={clsx(
-        'dg-editor-dialog fixed inset-0 m-auto max-h-[92dvh] w-[calc(100%-2rem)] overflow-hidden rounded-3xl border-0 bg-white p-0 text-neutral-900 shadow-2xl outline-none backdrop:bg-neutral-950/30 backdrop:backdrop-blur-[3px] dark:bg-neutral-900 dark:text-neutral-100',
+        'dg-editor-dialog fixed inset-0 m-auto max-h-[92dvh] w-[calc(100%-2rem)] overflow-hidden rounded-3xl border-0 bg-white p-0 text-neutral-900 outline-none backdrop:bg-neutral-950/30 backdrop:backdrop-blur-[3px] dark:bg-neutral-900 dark:text-neutral-100',
         fixedHeight
           ? 'h-[min(940px,92dvh)] max-w-[1080px]'
           : alert

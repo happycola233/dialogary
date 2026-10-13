@@ -177,7 +177,6 @@ export function SelectionAnnotation() {
           // 先把原样摘录交给编辑器，再清除选区；焦点切换不会丢失长文本。
           state.setEditor({
             id: message.id,
-            date: message.effectiveDate ?? '',
             tab: 'annotations',
             quote: selected.quote,
           })

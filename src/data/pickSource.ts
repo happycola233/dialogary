@@ -201,6 +201,11 @@ export async function walkDirectoryHandle(
   return out
 }
 
+/** 重新读取已授权目录中的附件，路径与首次打开文件夹时一致（相对日记文件）。 */
+export async function assetsFromDirectory(directory: FileSystemDirectoryHandle, chatName: string): Promise<Map<string, File> | null> {
+  return (await sourceFromFiles(await walkDirectoryHandle(directory), chatName))?.assets ?? null
+}
+
 export function supportsDirectoryPicker(): boolean {
   return 'showDirectoryPicker' in window
 }

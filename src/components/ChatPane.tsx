@@ -1,6 +1,9 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
+import { PenLine } from 'lucide-react'
+import { formatDateCn, weekdayOf } from '../lib/format'
 import { setLazyMessageObservationPaused } from '../lib/lazyRendering'
-import { useAppStore } from '../model/store'
+import type { DerivedDoc } from '../model/derive'
+import { todayString, useAppStore } from '../model/store'
 import { DateDivider } from './DateDivider'
 import { LazyMessage } from './LazyMessage'
 import { SelectionAnnotation } from './SelectionAnnotation'
@@ -332,6 +335,32 @@ export function ChatPane() {
           </section>
         )
       })}
+      {!hasFilters(filters) && <TodayEntry doc={doc} />}
+    </div>
+  )
+}
+
+/** 文末的书写入口：今天还没有日期节时也能顺手写下今天，无需回到顶部。 */
+function TodayEntry({ doc }: { doc: DerivedDoc }) {
+  const setEditor = useAppStore((s) => s.setEditor)
+  const today = todayString()
+  const last = doc.sessions.at(-1)
+  const continuing = last?.date === today
+  return (
+    <div className="flex justify-center pt-8">
+      <button
+        type="button"
+        onClick={() =>
+          setEditor({ date: today, afterId: continuing ? last.messages.at(-1)?.id : undefined })
+        }
+        className="inline-flex max-w-full items-center gap-2 rounded-2xl border border-dashed border-neutral-300 px-4 py-2.5 text-sm text-neutral-500 transition hover:border-[var(--dg-accent)] hover:bg-[var(--dg-accent-soft)] hover:text-[var(--dg-accent)] focus-visible:outline-2 focus-visible:outline-[var(--dg-accent)] dark:border-neutral-700 dark:text-neutral-400"
+      >
+        <PenLine size={15} className="shrink-0" />
+        <span className="font-medium">{continuing ? '继续写今天' : '写下今天'}</span>
+        <span className="truncate text-xs text-neutral-400">
+          {formatDateCn(today)} {weekdayOf(today)}
+        </span>
+      </button>
     </div>
   )
 }

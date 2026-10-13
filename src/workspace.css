@@ -223,7 +223,9 @@ html.dark[data-palette='slate'] {
       0 7px 40px rgb(0 0 0 / 0.5),
       0 0 0 1px rgb(255 255 255 / 0.07);
   }
-  .dg-menu > button {
+  /* 列表较长时放进可滚动容器，条目样式与菜单项一致。 */
+  .dg-menu > button,
+  .dg-menu-list > button {
     display: flex;
     width: 100%;
     align-items: center;
@@ -235,10 +237,12 @@ html.dark[data-palette='slate'] {
     color: #66717e;
     cursor: pointer;
   }
-  .dark .dg-menu > button {
+  .dark .dg-menu > button,
+  .dark .dg-menu-list > button {
     color: #c0c7d1;
   }
-  .dg-menu > button:hover {
+  .dg-menu > button:hover,
+  .dg-menu-list > button:hover {
     background: var(--dg-accent-soft);
     color: var(--dg-accent);
   }

@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { deriveDoc } from '../model/derive'
 import { applyMessageEdit } from '../model/mutations'
 import { parseChatlog, serializeChatlog } from '../parser/chatlog'
-import { createMessageDraft, draftParts, withParts } from './types'
+import {
+  clockOf,
+  createMessageDraft,
+  draftParts,
+  insertionIndex,
+  withClock,
+  withParts,
+} from './types'
 
 // 全部为虚构内容；特意将正文与简写附件交错，保留单换行和行尾空格。
 const source = [
@@ -99,5 +106,61 @@ describe('记录编辑保留未改正文', () => {
     ])
       expect(saved).not.toHaveProperty(field)
     expect(serializeChatlog(doc)).toBe(source)
+  })
+})
+
+describe('记录所在日期与消息时间', () => {
+  // 虚构的跨日记录：零点后继续的对话仍写在前一天的日期节里。
+  const crossDay = [
+    '---',
+    'format: chatlog-md/2',
+    '---',
+    '',
+    '# @2026-09-19',
+    '',
+    '## 🤖 @ai · 2026-09-20 00:10',
+    '',
+    '示例回复',
+    '',
+  ].join('\n')
+
+  it('以所在日期节编辑跨日记录，保存后不会移到时间所属的日期', () => {
+    const doc = parseChatlog(crossDay)
+    const message = deriveDoc(doc, []).messages[0]!
+    expect(message.effectiveDate).toBe('2026-09-20')
+    const draft = createMessageDraft(message, doc.sessions[0]!.date!)
+    applyMessageEdit(doc, { ...draft, content: '示例回复，补充一句' }, 0)
+    expect(doc.sessions).toHaveLength(1)
+    expect(doc.sessions[0]!.messages[0]!.time).toBe('2026-09-20 00:10')
+  })
+
+  it('只替换时刻，保留时间自身的日期与只记日期的精度', () => {
+    expect(clockOf('2026-09-20 00:10')).toBe('00:10')
+    expect(clockOf('2026-09-20 00:10:05')).toBe('00:10:05')
+    expect(clockOf('2026-09-20')).toBe('')
+    expect(clockOf(null)).toBe('')
+    expect(withClock('2026-09-20 00:10', '2026-09-19', '00:30', false)).toBe('2026-09-20 00:30')
+    expect(withClock(null, '2026-09-19', '21:30', false)).toBe('2026-09-19 21:30')
+    expect(withClock('2026-09-19 21:30', '2026-09-19', '', false)).toBeNull()
+    expect(withClock('2026-09-19 21:30', '2026-09-19', '', true)).toBe('2026-09-19')
+  })
+})
+
+describe('新增内容块的位置', () => {
+  const parts = [
+    { kind: 'reasoning', text: '示例思考' },
+    { kind: 'answer', text: '示例正文' },
+    { kind: 'attachment', data: { kind: 'image', name: '示例.jpg' } },
+  ]
+
+  it('思考、过程说明与检索插在第一段正文之前', () => {
+    for (const kind of ['reasoning', 'commentary', 'search'])
+      expect(insertionIndex(parts, kind)).toBe(1)
+    expect(insertionIndex([{ kind: 'attachment' }], 'reasoning')).toBe(1)
+  })
+
+  it('正文与其他内容追加到末尾', () => {
+    expect(insertionIndex(parts, 'answer')).toBe(3)
+    expect(insertionIndex(parts, 'x-note')).toBe(3)
   })
 })

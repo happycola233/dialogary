@@ -96,6 +96,19 @@ export default function App() {
     return () => window.removeEventListener('beforeunload', preservePendingDraft)
   }, [])
 
+  // 从其他编辑器切回时核对磁盘，及时载入日记与附件的外部修改。
+  useEffect(() => {
+    const check = () => {
+      if (document.visibilityState === 'visible') void useAppStore.getState().syncWithDisk()
+    }
+    window.addEventListener('focus', check)
+    document.addEventListener('visibilitychange', check)
+    return () => {
+      window.removeEventListener('focus', check)
+      document.removeEventListener('visibilitychange', check)
+    }
+  }, [])
+
   // Ctrl/Cmd+K 打开搜索
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

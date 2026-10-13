@@ -12,6 +12,7 @@ import {
   PanelLeftOpen,
   PenLine,
   Redo2,
+  RefreshCw,
   Save,
   Search,
   Settings2,
@@ -20,6 +21,7 @@ import {
 import { useRef } from 'react'
 import { filesFromInput } from '../data/pickSource'
 import { todayString, useAppStore } from '../model/store'
+import { AttachmentStatus } from './AttachmentStatus'
 import { LintBadge } from './LintBadge'
 import { HistoryControls } from './HistoryControls'
 import { ThemeToggle } from './ThemeToggle'
@@ -92,6 +94,7 @@ export function TopBar({
       </div>
       <HistoryControls />
       <LintBadge />
+      <AttachmentStatus />
       <button
         className="dg-icon"
         aria-label="搜索记录"
@@ -186,6 +189,12 @@ export function TopBar({
                 <FolderOpen size={16} />
                 打开文件夹
               </button>
+              {(state.fileHandle || state.sourceKind === 'server') && (
+                <button onClick={() => action(() => void state.syncWithDisk(true))}>
+                  <RefreshCw size={16} />
+                  重新载入文件
+                </button>
+              )}
               <button onClick={() => action(() => state.setPanel('documents'))}>
                 <History size={16} />
                 最近打开的日记

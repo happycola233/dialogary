@@ -16,10 +16,18 @@ import {
   primaryButtonClass,
 } from './EditorDialog'
 import { PartsEditor } from './PartsEditor'
-import { createMessageDraft, draftParts, timePrecisionOf, withParts } from './types'
+import {
+  clockOf,
+  createMessageDraft,
+  draftParts,
+  timePrecisionOf,
+  withClock,
+  withParts,
+} from './types'
 import type { MessageDraft } from './types'
 import { UnsavedChangesDialog } from './UnsavedChangesDialog'
 import { JsonPreview } from '../components/JsonPreview'
+import { formatDateCn } from '../lib/format'
 
 const tabs = [
   { id: 'body', label: '正文' },
@@ -27,12 +35,13 @@ const tabs = [
   { id: 'parts', label: '过程' },
   { id: 'annotations', label: '批注' },
   { id: 'attachments', label: '附件' },
-  { id: 'source', label: '源码' },
+  { id: 'source', label: 'JSON' },
 ] as const
 type Tab = (typeof tabs)[number]['id']
 
+/** 行号与时间精度由文件位置和时间推导，不作为可编辑数据；读取时沿用原值。 */
 function editableSource(draft: MessageDraft): string {
-  const { original: _original, _source, ...value } = draft
+  const { original: _original, _source, line: _line, timePrecision: _precision, ...value } = draft
   return JSON.stringify(value, null, 2)
 }
 
@@ -95,7 +104,8 @@ interface StoredEditorDraft {
 
 export interface JournalEditorProps {
   message: DerivedMessage | null
-  date?: string
+  /** 记录所在的日期节；新记录为写入的日期。 */
+  date: string
   onSave: (draft: MessageDraft) => void | Promise<void>
   onClose: () => void
   onDelete?: () => void
@@ -118,7 +128,7 @@ export function JournalEditor({
   selectedQuote,
   draftKey,
 }: JournalEditorProps) {
-  const initial = useRef(createMessageDraft(message, date ?? message?.effectiveDate ?? undefined))
+  const initial = useRef(createMessageDraft(message, date))
   const [storedDraft] = useState<StoredEditorDraft | null>(() => {
     if (draftKey) {
       const saved = localStorage.getItem(`dialogary:editor:${draftKey}`)
@@ -235,7 +245,7 @@ export function JournalEditor({
       setTab(next)
       setError('')
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '源码格式不正确。')
+      setError(cause instanceof Error ? cause.message : 'JSON 格式不正确。')
     }
   }
   const save = async () => {
@@ -280,6 +290,15 @@ export function JournalEditor({
     draft.parts
       ?.map((part, index) => ({ part, index }))
       .filter(({ part }) => part.kind === 'answer') ?? []
+  const parts = draftParts(draft)
+  const fromAi = draft.role === 'ai'
+  // 「我」的记录没有思考与检索；已有过程块或正文与附件交错时，仍保留调整顺序的入口。
+  const hasProcess = parts.some((part) => part.kind !== 'answer' && part.kind !== 'attachment')
+  const showParts = fromAi || hasProcess || parts.length > 1
+  const visibleTab: Tab = tab === 'parts' && !showParts ? 'body' : tab
+  const clock = clockOf(draft.time)
+  const timeDay = draft.time?.slice(0, 10) ?? ''
+  const crossDay = Boolean(draft.date && timeDay && timeDay !== draft.date)
 
   return (
     <EditorDialog
@@ -427,54 +446,80 @@ export function JournalEditor({
                 setDraft({
                   ...draft,
                   date: event.target.value,
+                  // 换到另一天时，时间随记录一起移动，只保留时刻。
                   time:
                     draft.time && event.target.value
                       ? event.target.value + draft.time.slice(10)
-                      : null,
+                      : draft.time,
                 })
               }
               className={fieldClass}
             />
           </Field>
           <div className="col-span-2 sm:col-span-1">
-            <Field label="原始时间（可留空）">
+            <Field label="时间（可留空）">
               <input
-                value={draft.time ?? ''}
-                onChange={(event) => setDraft({ ...draft, time: event.target.value || null })}
-                pattern="\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2})?)?"
-                placeholder="2026-09-19 21:30"
+                type="time"
+                step={clock.length > 5 ? 1 : 60}
+                value={clock}
+                disabled={!draft.date && !draft.time}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    time: withClock(
+                      draft.time,
+                      draft.date,
+                      event.target.value,
+                      initial.current.time?.length === 10,
+                    ),
+                  })
+                }
                 className={fieldClass}
               />
             </Field>
+            {crossDay && (
+              <p className="mt-2 flex flex-wrap items-center gap-x-2 text-xs leading-5 text-neutral-500">
+                <span>时间记在 {formatDateCn(timeDay)}</span>
+                <button
+                  type="button"
+                  className="text-[var(--dg-accent)] hover:underline"
+                  onClick={() => setDraft({ ...draft, time: draft.date + draft.time!.slice(10) })}
+                >
+                  改为 {formatDateCn(draft.date)}
+                </button>
+              </p>
+            )}
           </div>
         </div>
         <nav
           aria-label="编辑内容"
-          className="sticky top-0 z-10 -mx-1 mb-6 grid grid-cols-6 gap-1 bg-white py-2 dark:bg-neutral-900 sm:flex"
+          className="sticky top-0 z-10 -mx-1 mb-6 grid auto-cols-fr grid-flow-col gap-1 bg-white py-2 dark:bg-neutral-900 sm:flex"
         >
-          {tabs.map((item) => (
-            <button
-              type="button"
-              key={item.id}
-              aria-pressed={tab === item.id}
-              onClick={() => changeTab(item.id)}
-              className={clsx(
-                'min-w-0 shrink-0 rounded-xl px-1 py-2 text-xs transition sm:px-3 sm:text-sm',
-                tab === item.id
-                  ? 'bg-neutral-100 font-medium text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100'
-                  : 'text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100',
-              )}
-            >
-              {item.label}
-              {item.id === 'annotations' && !!draft.annotations?.length
-                ? ` ${draft.annotations.length}`
-                : item.id === 'attachments' && !!draft.attachments.length
-                  ? ` ${draft.attachments.length}`
-                  : ''}
-            </button>
-          ))}
+          {tabs.map((item) =>
+            item.id === 'parts' && !showParts ? null : (
+              <button
+                type="button"
+                key={item.id}
+                aria-pressed={visibleTab === item.id}
+                onClick={() => changeTab(item.id)}
+                className={clsx(
+                  'min-w-0 shrink-0 rounded-xl px-1 py-2 text-xs transition sm:px-3 sm:text-sm',
+                  visibleTab === item.id
+                    ? 'bg-neutral-100 font-medium text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100'
+                    : 'text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100',
+                )}
+              >
+                {item.id === 'parts' && !fromAi && !hasProcess ? '顺序' : item.label}
+                {item.id === 'annotations' && !!draft.annotations?.length
+                  ? ` ${draft.annotations.length}`
+                  : item.id === 'attachments' && !!draft.attachments.length
+                    ? ` ${draft.attachments.length}`
+                    : ''}
+              </button>
+            ),
+          )}
         </nav>
-        <div hidden={tab !== 'body'} className="space-y-4">
+        <div hidden={visibleTab !== 'body'} className="space-y-4">
           {(answerParts.length
             ? answerParts
             : [{ part: { kind: 'answer', text: draft.content } as MessagePart, index: -1 }]
@@ -483,7 +528,7 @@ export function JournalEditor({
               key={i === 0 ? 'primary-answer' : (part.id ?? index)}
               label={i === 0 ? '正文' : `正文 ${i + 1}`}
               autoFocus={i === 0}
-              active={tab === 'body'}
+              active={visibleTab === 'body'}
               value={part.text ?? ''}
               onChange={(content) =>
                 setDraft((current) => {
@@ -502,23 +547,24 @@ export function JournalEditor({
             />
           ))}
         </div>
-        {tab === 'details' && (
+        {visibleTab === 'details' && (
           <DetailsEditor draft={draft} onChange={setDraft} tags={availableTags} />
         )}
-        {tab === 'parts' && (
+        {visibleTab === 'parts' && (
           <PartsEditor
-            parts={draftParts(draft)}
-            onChange={(parts) => setDraft(withParts(draft, parts))}
+            parts={parts}
+            processKinds={fromAi}
+            onChange={(next) => setDraft(withParts(draft, next))}
           />
         )}
-        {tab === 'annotations' && (
+        {visibleTab === 'annotations' && (
           <AnnotationsEditor
             annotations={draft.annotations ?? []}
             onChange={(annotations) => setDraft({ ...draft, annotations })}
             selectedQuote={selectedQuote}
           />
         )}
-        {tab === 'attachments' && (
+        {visibleTab === 'attachments' && (
           <AttachmentsEditor
             attachments={draft.attachments}
             onChange={(attachments) => setDraft((current) => ({ ...current, attachments }))}
@@ -526,29 +572,28 @@ export function JournalEditor({
             onBusyChange={setAddingAttachments}
           />
         )}
-        {tab === 'source' && (
+        {visibleTab === 'source' && (
           <div className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-xs text-neutral-400">JSON</span>
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-xs leading-5 text-neutral-500">
+                这条记录的完整数据，包括正文、过程、附件与扩展字段。修改整份 Markdown
+                请使用「更多操作 → 编辑整个文件」。
+              </p>
               <button
                 type="button"
-                className="flex items-center gap-1.5 text-xs text-[var(--dg-accent)]"
+                className="flex shrink-0 items-center gap-1.5 text-xs leading-5 text-[var(--dg-accent)]"
                 onClick={() => setSourcePreview(!sourcePreview)}
               >
                 {sourcePreview ? <Pencil size={14} /> : <Eye size={14} />}
-                {sourcePreview ? '编辑 JSON' : '预览 JSON'}
+                {sourcePreview ? '编辑' : '预览'}
               </button>
             </div>
-            <p className="text-xs leading-5 text-neutral-500">
-              编辑完整消息数据（JSON），包括扩展字段。要编辑整份
-              Markdown，请使用文件菜单中的「编辑源文件」。
-            </p>
             {sourcePreview ? (
               <JsonPreview text={source} className="max-h-[52dvh]" />
             ) : (
               <textarea
                 spellCheck={false}
-                aria-label="消息源码"
+                aria-label="记录 JSON"
                 rows={22}
                 value={source}
                 onChange={(event) => setSource(event.target.value)}

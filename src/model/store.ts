@@ -1,6 +1,13 @@
 import { create } from 'zustand'
 import { loadFromServer, serverAssetResolver } from '../data/fetchSource'
-import { chooseFile, chooseSaveFile, downloadText, writeAsset, writeFile } from '../data/fileAccess'
+import {
+  canRead,
+  chooseFile,
+  chooseSaveFile,
+  downloadText,
+  writeAsset,
+  writeFile,
+} from '../data/fileAccess'
 import { loadLastDoc } from '../data/persistence'
 import {
   createRevision,
@@ -11,6 +18,7 @@ import {
   type WorkspaceSnapshot,
 } from '../data/workspace'
 import {
+  assetsFromDirectory,
   createFileAssetResolver,
   nullAssetResolver,
   pickDirectoryModern,
@@ -57,7 +65,8 @@ export type Panel =
   | null
 export interface EditorTarget {
   id?: string
-  date: string
+  /** 新记录写入的日期；编辑已有记录时总是使用它所在的日期节。 */
+  date?: string
   afterId?: string
   quote?: string
   tab?: string
@@ -113,6 +122,8 @@ interface AppState {
   reconnectImages: () => Promise<void>
   saveFile: (asNew?: boolean) => Promise<void>
   saveDraft: () => Promise<boolean>
+  /** 核对磁盘上的日记与附件；request 为 true 时来自用户点击，可请求读取授权并报告结果。 */
+  syncWithDisk: (request?: boolean) => Promise<void>
   addAttachments: (files: File[]) => Promise<Attachment[]>
   commitText: (text: string, label: string, messageIds?: string[]) => void
   getHistoryTexts: (id: string) => HistoryTexts | null
@@ -162,6 +173,23 @@ interface AppState {
 const READING_ID = Symbol('readingId')
 type EditableMessage = Message & { [READING_ID]?: string }
 let draftSequence = 0
+let diskCheck: Promise<void> | null = null
+
+/** 本地附件优先；随应用部署的网页数据再回退到服务器上的附件。 */
+function resolverFor(assets: Map<string, File>, sourceKind: SourceKind): AssetResolver {
+  const local = createFileAssetResolver(assets)
+  return sourceKind === 'server' ? (path) => local(path) ?? serverAssetResolver(path) : local
+}
+
+/** 路径、大小与修改时间都一致时沿用现有附件，避免重建对象 URL 让图片闪烁。 */
+function sameAssets(left: Map<string, File>, right: Map<string, File>): boolean {
+  if (left.size !== right.size) return false
+  for (const [path, file] of left) {
+    const other = right.get(path)
+    if (!other || other.size !== file.size || other.lastModified !== file.lastModified) return false
+  }
+  return true
+}
 
 function messageFingerprint(message: Message): string {
   const { id: _id, line: _line, _source: _source, ...content } = message
@@ -317,7 +345,6 @@ export const useAppStore = create<AppState>((set, get) => ({
           restored.sourceKind === 'server' ? serverAssetResolver : nullAssetResolver,
         )
         const assets = new Map(restored.assets)
-        const localResolver = createFileAssetResolver(assets)
         set({
           ...parsedState(restored.text, restored.messageIds),
           sourceKey: restored.key,
@@ -330,21 +357,10 @@ export const useAppStore = create<AppState>((set, get) => ({
           past: restored.past ?? [],
           future: restored.future ?? [],
           pendingAssets: new Set(restored.pendingAssets ?? []),
-          resolveAsset: (path) =>
-            localResolver(path) ??
-            (restored.sourceKind === 'server' ? serverAssetResolver(path) : null),
+          resolveAsset: resolverFor(assets, restored.sourceKind),
         })
-        if (restored.sourceKind === 'server') {
-          const fresh = await loadFromServer(restored.name)
-          set({ serverFiles: fresh.files })
-          if (fresh.chat?.name === restored.name && fresh.chat.text !== restored.baseline) {
-            if (restored.text === restored.baseline) {
-              get().commitText(fresh.chat.text, '同步文件')
-              set({ baseline: fresh.chat.text })
-              void get().saveDraft()
-            } else set({ externalText: fresh.chat.text, fileStatus: 'conflict' })
-          }
-        }
+        // 关闭页面期间文件可能被其他编辑器修改；仍有读取授权时立即核对。
+        await get().syncWithDisk()
         return
       }
     } catch {
@@ -460,7 +476,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!restored) return
     get().loadText(restored.name, restored.text)
     const assets = new Map(restored.assets)
-    const resolver = createFileAssetResolver(assets)
     set({
       ...parsedState(restored.text, restored.messageIds),
       sourceKey: key,
@@ -473,10 +488,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       pendingAssets: new Set(restored.pendingAssets ?? []),
       fileHandle: restored.fileHandle,
       directoryHandle: restored.directoryHandle,
-      resolveAsset: (path) =>
-        resolver(path) ?? (restored.sourceKind === 'server' ? serverAssetResolver(path) : null),
+      resolveAsset: resolverFor(assets, restored.sourceKind),
     })
     await get().saveDraft()
+    await get().syncWithDisk()
   },
   newDocument: async () => {
     if (get().fileStatus === 'saving') {
@@ -507,13 +522,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     for (const [path, file] of source?.assets ??
       picked.files.map((file) => [file.relPath, file.file] as const))
       assets.set(path, file)
-    const localResolver = createFileAssetResolver(assets)
-    const isServer = get().sourceKind === 'server'
     // 重新关联仅补充资源，不切换文档，也不改变当前文件的写入目录。
-    set({
-      assets,
-      resolveAsset: (path) => localResolver(path) ?? (isServer ? serverAssetResolver(path) : null),
-    })
+    set({ assets, resolveAsset: resolverFor(assets, get().sourceKind) })
     await get().saveDraft()
     showToast('已重新关联附件')
   },
@@ -623,6 +633,84 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
+  syncWithDisk: (request = false) => {
+    // 窗口频繁获得焦点时合并为一次核对；主动载入排在进行中的核对之后，仍会报告结果。
+    if (diskCheck) return request ? diskCheck.then(() => get().syncWithDisk(true)) : diskCheck
+    diskCheck = (async () => {
+      const initial = get()
+      if (!initial.doc || initial.fileStatus === 'saving') return
+      const stillCurrent = () =>
+        get().sourceKey === initial.sourceKey && get().fileStatus !== 'saving'
+      // 先确认文件夹授权：它同时覆盖其中的日记文件，避免连续弹出两次授权。
+      const directoryReadable =
+        !!initial.directoryHandle && (await canRead(initial.directoryHandle, request))
+      let external: string | null = null
+      if (initial.fileHandle) {
+        if (!(await canRead(initial.fileHandle, request))) {
+          if (request) showToast('需要允许读取文件，才能载入最新内容')
+          return
+        }
+        try {
+          external = await (await initial.fileHandle.getFile()).text()
+        } catch (error) {
+          // 文件被移动或删除时不改动草稿，只在用户主动载入时说明原因。
+          if (request) showToast(`未能读取文件：${errorText(error)}`)
+          return
+        }
+      } else if (initial.sourceKind === 'server' && initial.sourceName) {
+        const fresh = await loadFromServer(initial.sourceName)
+        set({ serverFiles: fresh.files })
+        if (fresh.chat?.name === initial.sourceName) external = fresh.chat.text
+      }
+      if (external === null || !stillCurrent()) return
+
+      // 附件文件被替换后，旧的 File 对象无法再读取；目录内容有变化时整体换用新文件。
+      let assetsChanged = false
+      if (directoryReadable) {
+        const scanned = await assetsFromDirectory(
+          initial.directoryHandle!,
+          initial.sourceName!,
+        ).catch(() => null)
+        const current = get()
+        if (scanned && stillCurrent()) {
+          // 尚未写入目录的新附件，以及日记目录之外（../）的引用，继续使用已载入的文件。
+          for (const [path, file] of current.assets)
+            if (current.pendingAssets.has(path) || path.startsWith('../')) scanned.set(path, file)
+          if (!sameAssets(current.assets, scanned)) {
+            set({ assets: scanned, resolveAsset: resolverFor(scanned, current.sourceKind) })
+            assetsChanged = true
+          }
+        }
+      }
+      if (!stillCurrent()) return
+
+      const state = get()
+      // 已提示过的同一份外部内容只在主动载入时再次对照；整份源文件编辑中时留到保存前核对。
+      const textChanged =
+        external !== state.baseline &&
+        (request || external !== state.externalText) &&
+        state.panel !== 'source'
+      if (textChanged) {
+        if (external === state.text)
+          set({
+            baseline: external,
+            externalText: null,
+            fileStatus: state.fileStatus === 'conflict' ? 'idle' : state.fileStatus,
+          })
+        else if (state.text === state.baseline) {
+          state.commitText(external, '载入外部修改')
+          set({ baseline: external, externalText: null })
+          showToast('已载入文件的最新内容')
+        } else set({ fileStatus: 'conflict', externalText: external })
+      } else if (assetsChanged) showToast('附件已更新')
+      else if (request) showToast('文件没有新的修改')
+      if (textChanged || assetsChanged) await get().saveDraft()
+    })().finally(() => {
+      diskCheck = null
+    })
+    return diskCheck
+  },
+
   addAttachments: async (files) => {
     const assets = new Map(get().assets)
     const pendingAssets = new Set(get().pendingAssets)
@@ -639,13 +727,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         meta: {},
       })
     }
-    const localResolver = createFileAssetResolver(assets)
-    const isServer = get().sourceKind === 'server'
-    set({
-      assets,
-      pendingAssets,
-      resolveAsset: (path) => localResolver(path) ?? (isServer ? serverAssetResolver(path) : null),
-    })
+    set({ assets, pendingAssets, resolveAsset: resolverFor(assets, get().sourceKind) })
     await get().saveDraft()
     return added
   },

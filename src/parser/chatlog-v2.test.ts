@@ -91,6 +91,61 @@ describe('v2 保真读写', () => {
     expect(doc.issues.some((issue) => issue.rule === 'invalid-yaml')).toBe(true)
     expect(serializeChatlog(doc)).toBe(source)
   })
+
+  describe('只改写变化的元数据键', () => {
+    // 手写风格：行内列表、对齐注释、引号与块状文字都应逐字保留。
+    const meta = [
+      '# 整理于周末',
+      'id: m-style',
+      'tags: [读书, 计划]   # 手写标签',
+      'mood: "平静"',
+      'annotations:',
+      '  - id: note-style',
+      '    text: |',
+      '      第一行',
+      '      第二行',
+      'starred: true',
+    ]
+    const source = (lines: string[]) =>
+      FM + '## 🧑‍💻 @user\n<!-- @meta\n' + lines.map((line) => line + '\n').join('') + '-->\n\n正文\n'
+
+    it.each(['LF', 'CRLF'])('%s 下改一个键时，其余键的写法逐字保留', (newline) => {
+      const convert = (text: string) => (newline === 'CRLF' ? text.replaceAll('\n', '\r\n') : text)
+      const result = edit(convert(source(meta)), { starred: false })
+      expect(result).toBe(convert(source(meta.map((line) => line.replace('starred: true', 'starred: false')))))
+    })
+
+    it('修改行内列表与带引号的文字时保持原来的风格和行尾注释', () => {
+      const result = edit(source(meta), { tags: ['读书', '计划', '散步'], mood: '开心' })
+      expect(result).toBe(
+        source(
+          meta.map((line) =>
+            line.startsWith('tags:')
+              ? 'tags: [读书, 计划, 散步]   # 手写标签'
+              : line.startsWith('mood:')
+                ? 'mood: "开心"'
+                : line,
+          ),
+        ),
+      )
+    })
+
+    it('移除的键连同所在行删除，新增的键追加在末尾', () => {
+      const result = edit(source(meta), { tags: undefined, reactions: ['🌱'] })
+      const expected = meta.filter((line) => !line.startsWith('tags:'))
+      expect(result).toBe(source([...expected, 'reactions:', '  - 🌱']))
+      expect(first(parseChatlog(result)).reactions).toEqual(['🌱'])
+    })
+
+    it('文档头只改写标题，其余字段与注释保持原样', () => {
+      const header = '---\nformat: chatlog-md/2\ntitle: 虚构测试   # 名称\ntimezone: "Asia/Shanghai"\nx-tags: [甲, 乙]\n---\n\n'
+      const doc = parseChatlog(header + '## 🧑‍💻 @user\n\n正文\n')
+      doc.meta.title = '新的名称'
+      expect(serializeChatlog(doc)).toBe(
+        header.replace('title: 虚构测试', 'title: 新的名称') + '## 🧑‍💻 @user\n\n正文\n',
+      )
+    })
+  })
 })
 
 describe('v2 自包含追加与移动', () => {

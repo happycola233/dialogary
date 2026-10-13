@@ -11,7 +11,7 @@ import {
   primaryButtonClass,
   mutedButtonClass,
 } from '../editor/EditorDialog'
-import { useAppStore, savedViewsOf } from '../model/store'
+import { useAppStore, savedViewsOf, todayString } from '../model/store'
 import { parseChatlog } from '../parser/chatlog'
 import { lintChatDoc } from '../parser/lint'
 import { matchesFilters } from '../model/filters'
@@ -55,6 +55,10 @@ export function WorkspacePanels() {
   const editorMessage = state.editor?.id
     ? (state.doc.messages.find((message) => message.id === state.editor!.id) ?? null)
     : null
+  // 消息时间可能跨到第二天；编辑器的日期必须是记录实际所在的日期节，否则保存会把它移走。
+  const editorDate = editorMessage
+    ? (state.doc.sessions[editorMessage.sessionIndex]?.date ?? '')
+    : (state.editor?.date ?? todayString())
   return (
     <>
       {state.editor && (
@@ -70,7 +74,7 @@ export function WorkspacePanels() {
           <JournalEditor
             key={`${state.sourceKey}:${state.editor.id ?? 'new'}:${state.editor.afterId ?? ''}`}
             message={editorMessage}
-            date={state.editor.date}
+            date={editorDate}
             draftKey={`${state.sourceKey}:${state.editor.id ?? 'new'}:${state.editor.afterId ?? ''}`}
             initialTab={
               state.editor.tab as

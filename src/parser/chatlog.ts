@@ -1,4 +1,5 @@
-import { parseDocument, stringify } from 'yaml'
+import { Document, isCollection, isMap, isNode, isScalar, parseDocument, Scalar, stringify, visit } from 'yaml'
+import type { YAMLMap } from 'yaml'
 import { serializeBodyParts } from './bodySerialization'
 import { syncAttachmentParts } from './attachmentParts'
 import { parseChatlogV1, RE, KNOWN_ROLES } from './chatlog-v1'
@@ -459,14 +460,68 @@ function metadataFor(object: Message | Session): Metadata {
   return meta
 }
 
+/** 重写单个顶层键：沿用原键的写法；原本写在一行的集合、带引号的文字保持同样的风格。 */
+function pairText(key: Scalar, original: unknown, value: unknown): string {
+  const doc = new Document({ [String(key.value)]: value })
+  const pair = (doc.contents as YAMLMap).items[0]!
+  const name = key.clone() as Scalar
+  name.commentBefore = name.comment = undefined
+  name.spaceBefore = false
+  pair.key = name
+  if (isCollection(original) && original.flow && isCollection(pair.value)) pair.value.flow = true
+  if (
+    isScalar(original) && isScalar(pair.value) && typeof value === 'string' &&
+    (original.type === Scalar.QUOTE_DOUBLE || original.type === Scalar.QUOTE_SINGLE)
+  ) pair.value.type = original.type
+  return doc.toString({ lineWidth: 0, flowCollectionPadding: false })
+}
+
+/**
+ * 只替换取值有变化的顶层键，其余键连同注释、空格、引号与流式写法逐字保留；
+ * 新键追加在末尾，删除的键连同所在行一起移除。无法可靠定位时返回 null。
+ */
+function spliceYaml(text: string, meta: Metadata): string | null {
+  const doc = parseDocument(text)
+  if (doc.errors.length || (doc.contents !== null && (!isMap(doc.contents) || doc.contents.flow))) return null
+  let aliased = false
+  visit(doc, { Alias: () => { aliased = true; return visit.BREAK } })
+  if (aliased) return null
+  const before = (doc.toJS() ?? {}) as Metadata
+  const edits: { start: number; end: number; text: string }[] = []
+  for (const pair of (doc.contents as YAMLMap | null)?.items ?? []) {
+    const { key, value } = pair
+    // 只处理从行首开始的普通文字键；缩进映射或复杂键交给整体重排。
+    if (!isScalar(key) || typeof key.value !== 'string' || !key.range || !isNode(value) || !value.range) return null
+    const start = key.range[0]
+    if (start > 0 && text[start - 1] !== '\n') return null
+    // 块状取值的范围已包含行尾换行，行内取值不含；替换后保持同样的结尾。
+    const end = value.range[1]
+    if (!(key.value in meta)) {
+      const lineEnd = text[end - 1] === '\n' ? end : text.indexOf('\n', end) + 1 || text.length
+      edits.push({ start, end: lineEnd, text: '' })
+    } else if (json(before[key.value]) !== json(meta[key.value])) {
+      const rendered = pairText(key, value, meta[key.value])
+      edits.push({ start, end, text: text[end - 1] === '\n' ? rendered : rendered.replace(/\n$/, '') })
+    }
+  }
+  let result = text
+  for (const edit of edits.sort((a, b) => b.start - a.start)) result = result.slice(0, edit.start) + edit.text + result.slice(edit.end)
+  const added = Object.fromEntries(Object.entries(meta).filter(([key]) => !(key in before)))
+  if (Object.keys(added).length) result += (result && !result.endsWith('\n') ? '\n' : '') + stringify(added, { lineWidth: 0 })
+  return result
+}
+
 function yamlFor(meta: Metadata, source?: SourceFragment): string {
   if (source?.yaml) {
+    // 源片段保留文件原有换行；统一为 LF 后定位，写回时再换成文件的换行符。
+    const spliced = spliceYaml(source.yaml.replace(/\r\n/g, '\n'), meta)
+    if (spliced !== null) return spliced
     const yaml = parseDocument(source.yaml)
     if (!yaml.errors.length && isRecord(yaml.toJS())) {
       const before = yaml.toJS() as Metadata
       for (const key of Object.keys(before)) if (!(key in meta)) yaml.delete(key)
       for (const [key, value] of Object.entries(meta)) if (json(before[key]) !== json(value)) yaml.set(key, value)
-      return yaml.toString({ lineWidth: 0 })
+      return yaml.toString({ lineWidth: 0, flowCollectionPadding: false })
     }
   }
   return stringify(meta, { lineWidth: 0 })

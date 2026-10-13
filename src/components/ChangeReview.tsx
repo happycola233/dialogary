@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import {
   ArrowDown,
+  ArrowLeftRight,
   Check,
   Columns2,
   FileCheck2,
@@ -74,11 +75,14 @@ export function ChangeReview({
   after,
   beforeLabel = '修改前',
   afterLabel = '修改后',
+  onSwap,
 }: {
   before: string
   after: string
   beforeLabel?: string
   afterLabel?: string
+  /** 两侧都可作为基准时提供，由调用方交换内容与标签。 */
+  onSwap?: () => void
 }) {
   const review = useMemo(() => buildChangeReview(before, after), [before, after])
   const [layout, setLayout] = useState<'split' | 'unified'>(() =>
@@ -102,6 +106,16 @@ export function ChangeReview({
           </span>
         </div>
         <div className="dg-diff-options">
+          {onSwap && (
+            <button
+              className="dg-icon"
+              aria-label="互换左右两侧"
+              data-tooltip={`互换左右：${afterLabel}在左`}
+              onClick={onSwap}
+            >
+              <ArrowLeftRight size={16} />
+            </button>
+          )}
           <button
             className="dg-icon"
             aria-label={showAll ? '仅显示改动' : '显示完整上下文'}

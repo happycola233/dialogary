@@ -15,6 +15,8 @@ import { EditorDialog, mutedButtonClass, primaryButtonClass } from '../editor/Ed
 import { downloadText } from '../data/fileAccess'
 import { ChangeReview } from './ChangeReview'
 
+const CURRENT_FIRST_KEY = 'dialogary:history-current-first'
+
 export function HistoryControls() {
   const state = useAppStore()
   const undo = state.past.at(-1)
@@ -65,6 +67,22 @@ export function HistoryDialog({ onClose }: { onClose: () => void }) {
   const state = useAppStore()
   const [mode, setMode] = useState<'steps' | 'versions'>('steps')
   const [selected, setSelected] = useState<string | null>(null)
+  // 历史版本默认较早的内容在左；互换后记住选择，切换版本时保持同一方向。
+  const [currentFirst, setCurrentFirst] = useState(() => {
+    try {
+      return localStorage.getItem(CURRENT_FIRST_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  const swapVersionSides = () => {
+    setCurrentFirst(!currentFirst)
+    try {
+      localStorage.setItem(CURRENT_FIRST_KEY, currentFirst ? '0' : '1')
+    } catch {
+      /* 无法记住时仅影响本次查看。 */
+    }
+  }
   const entries = [...state.past, ...state.future]
   const entry = entries.find((item) => item.id === selected) ?? state.past.at(-1) ?? state.future[0]
   const revision = state.revisions.find((item) => item.id === selected) ?? state.revisions[0]
@@ -72,12 +90,14 @@ export function HistoryDialog({ onClose }: { onClose: () => void }) {
     () =>
       mode === 'versions'
         ? revision
-          ? { before: state.text, after: revision.text }
+          ? currentFirst
+            ? { before: state.text, after: revision.text }
+            : { before: revision.text, after: state.text }
           : null
         : entry
           ? state.getHistoryTexts(entry.id)
           : null,
-    [mode, revision, state.text, entry, state.getHistoryTexts],
+    [mode, revision, state.text, entry, state.getHistoryTexts, currentFirst],
   )
   const undone = entry && state.future.some((item) => item.id === entry.id)
   return (
@@ -248,8 +268,13 @@ export function HistoryDialog({ onClose }: { onClose: () => void }) {
                 key={`${mode}:${mode === 'steps' ? entry?.id : revision?.id}`}
                 before={texts.before}
                 after={texts.after}
-                beforeLabel={mode === 'versions' ? '当前草稿' : '操作前'}
-                afterLabel={mode === 'versions' ? '历史版本' : '操作后'}
+                beforeLabel={
+                  mode === 'versions' ? (currentFirst ? '当前草稿' : '历史版本') : '操作前'
+                }
+                afterLabel={
+                  mode === 'versions' ? (currentFirst ? '历史版本' : '当前草稿') : '操作后'
+                }
+                onSwap={mode === 'versions' ? swapVersionSides : undefined}
               />
             </>
           ) : (

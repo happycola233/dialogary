@@ -4,14 +4,20 @@ import { applyBatchEdit } from './mutations'
 import { createMessageDraft } from '../editor/types'
 import { useAppStore } from './store'
 import * as fileAccess from '../data/fileAccess'
+import * as pickSource from '../data/pickSource'
 import * as workspace from '../data/workspace'
 
 vi.mock('../data/fileAccess', () => ({
+  canRead: vi.fn(async () => true),
   chooseFile: vi.fn(),
   chooseSaveFile: vi.fn(),
   downloadText: vi.fn(),
   writeFile: vi.fn(),
   writeAsset: vi.fn(),
+}))
+vi.mock('../data/pickSource', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../data/pickSource')>()),
+  assetsFromDirectory: vi.fn(),
 }))
 vi.mock('../data/workspace', () => ({
   persistWorkspace: vi.fn().mockResolvedValue(undefined),
@@ -693,5 +699,62 @@ describe('所有文档操作的撤销与重做', () => {
     expect(useAppStore.getState()).toMatchObject({ text: SOURCE, baseline: saved })
     useAppStore.getState().redo()
     expect(useAppStore.getState()).toMatchObject({ text: saved, baseline: saved })
+  })
+})
+
+describe('外部修改与重新载入', () => {
+  it('草稿与磁盘一致时直接载入外部修改，并可撤销', async () => {
+    const external = SOURCE.replace('第一段', '外部修改')
+    useAppStore.setState({ fileHandle: handleWith(external) })
+    await useAppStore.getState().syncWithDisk()
+    expect(useAppStore.getState()).toMatchObject({ text: external, baseline: external })
+    useAppStore.getState().undo()
+    expect(useAppStore.getState().text).toBe(SOURCE)
+  })
+
+  it('草稿有改动时保留草稿进入对照；同一份外部内容只在主动载入时再次对照', async () => {
+    const external = SOURCE + '\n外部修改'
+    useAppStore.setState({ fileHandle: handleWith(external) })
+    useAppStore.getState().commitText(SOURCE.replace('第一段', '本地修改'), '测试')
+    await useAppStore.getState().syncWithDisk()
+    expect(useAppStore.getState()).toMatchObject({ fileStatus: 'conflict', externalText: external })
+    expect(useAppStore.getState().text).toContain('本地修改')
+    useAppStore.setState({ fileStatus: 'idle' })
+    await useAppStore.getState().syncWithDisk()
+    expect(useAppStore.getState().fileStatus).toBe('idle')
+    await useAppStore.getState().syncWithDisk(true)
+    expect(useAppStore.getState().fileStatus).toBe('conflict')
+  })
+
+  it('没有读取授权时不读取文件，也不改动草稿', async () => {
+    vi.mocked(fileAccess.canRead).mockResolvedValueOnce(false)
+    const handle = handleWith(SOURCE + '\n外部修改')
+    useAppStore.setState({ fileHandle: handle })
+    await useAppStore.getState().syncWithDisk()
+    expect(handle.getFile).not.toHaveBeenCalled()
+    expect(useAppStore.getState().text).toBe(SOURCE)
+  })
+
+  it('附件目录变化时换用新文件，尚未写入目录的附件保持不变', async () => {
+    const original = new File(['原图'], 'a.jpg', { lastModified: 1 })
+    const pending = new File(['新附件'], 'b.jpg', { lastModified: 1 })
+    const replaced = new File(['替换后的图'], 'a.jpg', { lastModified: 2 })
+    useAppStore.setState({
+      fileHandle: handleWith(SOURCE),
+      directoryHandle: {} as FileSystemDirectoryHandle,
+      assets: new Map([
+        ['assets/a.jpg', original],
+        ['assets/b.jpg', pending],
+      ]),
+      pendingAssets: new Set(['assets/b.jpg']),
+    })
+    vi.mocked(pickSource.assetsFromDirectory).mockResolvedValueOnce(
+      new Map([['assets/a.jpg', replaced]]),
+    )
+    await useAppStore.getState().syncWithDisk()
+    const { assets, text } = useAppStore.getState()
+    expect(assets.get('assets/a.jpg')).toBe(replaced)
+    expect(assets.get('assets/b.jpg')).toBe(pending)
+    expect(text).toBe(SOURCE)
   })
 })
